@@ -1,0 +1,45 @@
+package com.cerrojo.core
+
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
+import kotlin.math.pow
+import kotlin.math.roundToInt
+
+const val SUELO_POR_DEFECTO_MIN = 20
+const val MEDIA_POR_DEFECTO_MIN = 30
+const val DIAS_MINIMOS_DE_HISTORIAL = 3
+
+data class Limites(
+    val objetivoMin: Int,
+    val sesionMin: Int,
+    val enfriamientoMin: Int,
+    val presupuestoMin: Int,
+)
+
+fun mediaDeUso(minutosPorDia: List<Int>): Int {
+    if (minutosPorDia.size < DIAS_MINIMOS_DE_HISTORIAL) return MEDIA_POR_DEFECTO_MIN
+    val orden = minutosPorDia.sorted()
+    val medio = orden.size / 2
+    return if (orden.size % 2 == 1) orden[medio] else (orden[medio - 1] + orden[medio]) / 2
+}
+
+/**
+ * Semanas desde la instalacion contando lunes cruzados, no bloques de 7 dias:
+ * la spec dice que los objetivos bajan los lunes. La semana de la instalacion
+ * es la 1.
+ */
+fun semana(instalacion: LocalDate, hoy: LocalDate): Int =
+    ChronoUnit.WEEKS.between(
+        instalacion.with(DayOfWeek.MONDAY),
+        hoy.with(DayOfWeek.MONDAY),
+    ).toInt() + 1
+
+fun limitesDe(media: Int, semana: Int, sueloMin: Int = SUELO_POR_DEFECTO_MIN): Limites {
+    require(semana >= 1) { "la semana empieza en 1" }
+    val bruto = media * 0.9.pow(semana - 1)
+    val objetivo = maxOf(sueloMin, bruto.roundToInt())
+    val sesion = (objetivo / 4.0).roundToInt().coerceIn(5, 20)
+    val enfriamiento = (sesion * 4).coerceIn(20, 90)
+    return Limites(objetivo, sesion, enfriamiento, objetivo)
+}
