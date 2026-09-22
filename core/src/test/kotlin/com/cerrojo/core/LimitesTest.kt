@@ -46,6 +46,8 @@ class LimitesTest {
 
         val largo = limitesDe(media = 600, semana = 1)
         assertEquals(20, largo.sesionMin)
-        assertEquals(90, largo.enfriamientoMin)
+        // 80, no 90: el tope de sesion (20 min) hace que sesion*4 nunca alcance
+        // el maximo de 90 que fija la spec, asi que ese tope nunca llega a morder.
+        assertEquals(80, largo.enfriamientoMin)
     }
 }
