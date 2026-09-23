@@ -77,12 +77,19 @@ class EspejoDeAvisos(private val context: Context) {
      */
     private fun avisarSiSePerdioLaSesion() {
         if (!sesion.hayCuenta() || prefs.getBoolean("sesionAvisada", false)) return
-        if (sesion.token() != null) return
-        // Solo cuando el servidor rechaza las credenciales. Sin cobertura no es
-        // sesion muerta, y un error del servidor tampoco: avisar en cada tunel
+
+        // No se vuelve a pedir el token. El intento que acaba de fallar ya dejo
+        // dicho por que, y repetirlo lanzaria una segunda peticion cuyo codigo
+        // puede no coincidir con el de la primera: Supabase limita los intentos
+        // fallidos seguidos, y un 429 en la repeticion haria pasar por problema
+        // del servidor lo que era una sesion revocada. El aviso se perderia
+        // para siempre, que es exactamente el fallo que esto evita.
+        //
+        // Solo cuenta un rechazo de credenciales. Sin cobertura no es sesion
+        // muerta, y un error del servidor tampoco: avisar en cada tunel
         // volveria el aviso ruido de fondo, y entonces no serviria el dia que
         // la sesion muera de verdad.
-        if (sesion.ultimoFallo != Sesion.Fallo.RECHAZADA) return
+        if (sesion.ultimoFalloDeSesion != Sesion.Fallo.RECHAZADA) return
 
         prefs.edit().putBoolean("sesionAvisada", true).apply()
         // Se olvida DESPUES de decidir avisar, nunca antes: borrar primero

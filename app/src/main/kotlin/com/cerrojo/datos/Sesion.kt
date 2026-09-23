@@ -50,8 +50,14 @@ class Sesion(context: Context) {
      */
     enum class Fallo { NINGUNO, SIN_RED, RECHAZADA, DEL_SERVIDOR }
 
+    /**
+     * Motivo del ultimo intento contra el endpoint de autenticacion, y solo de
+     * ese. Las consultas de datos no lo tocan: un 403 por una regla de acceso
+     * a una tabla no dice nada sobre si la sesion sigue viva, y mezclarlos
+     * haria borrar la cuenta por un problema de consulta.
+     */
     @Volatile
-    var ultimoFallo = Fallo.NINGUNO
+    var ultimoFalloDeSesion = Fallo.NINGUNO
         private set
 
     /** Hay sesion guardada, aunque su token haya caducado. */
@@ -115,10 +121,10 @@ class Sesion(context: Context) {
             outputStream.use { it.write(cuerpo.toByteArray()) }
         }
         val codigo = c.responseCode
-        ultimoFallo = motivo(codigo)
+        ultimoFalloDeSesion = motivo(codigo)
         if (codigo in 200..299) JSONObject(c.inputStream.bufferedReader().readText()) else null
     } catch (_: Exception) {
-        ultimoFallo = Fallo.SIN_RED
+        ultimoFalloDeSesion = Fallo.SIN_RED
         null
     }
 
@@ -130,11 +136,10 @@ class Sesion(context: Context) {
             setRequestProperty("apikey", CLAVE_PUBLICABLE)
             setRequestProperty("Authorization", "Bearer $t")
         }
-        val codigo = c.responseCode
-        ultimoFallo = motivo(codigo)
-        if (codigo in 200..299) c.inputStream.bufferedReader().readText() else null
+        // A proposito no se toca ultimoFalloDeSesion: esto es una consulta de
+        // datos, no una de sesion.
+        if (c.responseCode in 200..299) c.inputStream.bufferedReader().readText() else null
     } catch (_: Exception) {
-        ultimoFallo = Fallo.SIN_RED
         null
     }
 
