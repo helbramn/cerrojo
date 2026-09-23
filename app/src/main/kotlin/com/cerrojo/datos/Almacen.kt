@@ -58,6 +58,14 @@ class Almacen(context: Context) {
         get() = prefs.getString("urlWeb", URL_WEB_POR_DEFECTO)!!
         set(valor) = prefs.edit().putString("urlWeb", valor).apply()
 
+    /**
+     * El usuario dio por buenos los dos permisos de MIUI que no se pueden
+     * comprobar por API. Sin esto, el asistente reaparecería en cada arranque.
+     */
+    var asistenteHecho: Boolean
+        get() = prefs.getBoolean("asistente", false)
+        set(valor) = prefs.edit().putBoolean("asistente", valor).apply()
+
     /** Semana con la que se calcularon los limites vigentes. */
     var semanaDeLosLimites: Int
         get() = prefs.getInt("semana", 0)
