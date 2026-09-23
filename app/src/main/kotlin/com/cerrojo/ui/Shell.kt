@@ -10,6 +10,7 @@ import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,6 +23,12 @@ import com.cerrojo.datos.Almacen
 class Shell : ComponentActivity() {
     private var web: WebView? = null
 
+    /**
+     * Vive fuera de la composicion porque el gesto de atras tambien lo
+     * consulta, y ese callback no es un Composable.
+     */
+    private var sinConexion by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val url = Almacen(this).urlWeb
@@ -29,28 +36,21 @@ class Shell : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 val w = web
-                if (w != null && w.canGoBack()) w.goBack() else finish()
+                // Con el aviso de sin conexion delante, retroceder movería un
+                // WebView que el usuario no ve: parecería que atras no hace
+                // nada. Ahi se sale, que es lo unico con efecto visible.
+                if (!sinConexion && w != null && w.canGoBack()) w.goBack() else finish()
             }
         })
 
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
-                var sinConexion by remember { mutableStateOf(false) }
-                var recarga by remember { mutableIntStateOf(0) }
-
-                if (sinConexion) {
-                    Column(
-                        Modifier.fillMaxSize().padding(32.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text("Sin conexión", style = MaterialTheme.typography.headlineSmall)
-                        Spacer(Modifier.height(8.dp))
-                        Text("El cerrojo sigue funcionando igual. Esto es solo la parte que necesita internet.")
-                        Spacer(Modifier.height(24.dp))
-                        Button(onClick = { sinConexion = false; recarga++ }) { Text("Reintentar") }
-                    }
-                } else {
+                // El WebView se queda montado SIEMPRE y el aviso de sin
+                // conexion se pinta encima. Si se desmontara, reintentar
+                // significaria crear otro desde cero: se perderia la posicion,
+                // lo que el usuario estuviera escribiendo, y la pagina donde
+                // fallo — volveria a la portada.
+                Box(Modifier.fillMaxSize()) {
                     AndroidView(
                         modifier = Modifier.fillMaxSize(),
                         factory = { ctx ->
@@ -67,6 +67,9 @@ class Shell : ComponentActivity() {
                                     override fun onReceivedError(
                                         v: WebView, req: WebResourceRequest, err: WebResourceError,
                                     ) {
+                                        // Solo el documento principal: una
+                                        // imagen que no carga no es estar sin
+                                        // conexion.
                                         if (req.isForMainFrame) sinConexion = true
                                     }
                                 }
@@ -74,8 +77,35 @@ class Shell : ComponentActivity() {
                                 loadUrl(url)
                             }
                         },
-                        update = { if (recarga > 0) it.reload() },
+                        // Sin esto el WebView se queda con sus recursos nativos
+                        // sin soltar al cerrar la pantalla.
+                        onRelease = {
+                            it.destroy()
+                            web = null
+                        },
                     )
+
+                    if (sinConexion) {
+                        Column(
+                            Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.background)
+                                .padding(32.dp),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text("Sin conexión", style = MaterialTheme.typography.headlineSmall)
+                            Spacer(Modifier.height(8.dp))
+                            Text("El cerrojo sigue funcionando igual. Esto es solo la parte que necesita internet.")
+                            Spacer(Modifier.height(24.dp))
+                            Button(onClick = {
+                                sinConexion = false
+                                // Recargar el mismo WebView reintenta la pagina
+                                // que fallo, no la portada.
+                                web?.reload()
+                            }) { Text("Reintentar") }
+                        }
+                    }
                 }
             }
         }
