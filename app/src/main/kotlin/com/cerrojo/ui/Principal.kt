@@ -1,6 +1,7 @@
 package com.cerrojo.ui
 
 import android.Manifest
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -25,6 +26,11 @@ class Principal : ComponentActivity() {
             registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
                 .launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+        // Se lee una sola vez al crear la Activity: distingue el arranque
+        // normal por el icono del lanzador de la entrada explicita desde el
+        // boton de ajustes de Shell, y no debe cambiar aunque la pantalla se
+        // recomponga (rotacion, vuelta de onResume, etc.).
+        val abrirAjustes = intent.getBooleanExtra(EXTRA_AJUSTES, false)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 val almacen = remember { Almacen(this@Principal) }
@@ -41,8 +47,20 @@ class Principal : ComponentActivity() {
                         almacen.asistenteHecho = true
                         hecho = true
                     })
-                } else {
+                } else if (abrirAjustes) {
+                    // Entrada explicita desde Shell, no el arranque por icono:
+                    // aqui es donde vive de verdad la lista de apps vigiladas
+                    // y la cuenta.
                     PantallaDeAjustes()
+                } else {
+                    // El icono del lanzador tiene que llevar a la app de
+                    // disciplina (spec §11), no a una lista de permisos y
+                    // apps vigiladas: esta pantalla solo decide adonde ir y
+                    // se cierra, no se queda de por medio.
+                    LaunchedEffect(Unit) {
+                        startActivity(Intent(this@Principal, Shell::class.java))
+                        finish()
+                    }
                 }
             }
         }
@@ -57,5 +75,10 @@ class Principal : ComponentActivity() {
         if (Permisos.todos.none { it.puestoSegunElSistema(this) == false }) {
             ServicioDeVigilancia.arrancar(this)
         }
+    }
+
+    companion object {
+        /** Distingue el boton de ajustes de Shell del arranque normal por icono. */
+        const val EXTRA_AJUSTES = "ajustes"
     }
 }

@@ -1,5 +1,6 @@
 package com.cerrojo.ui
 
+import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Bundle
 import android.webkit.CookieManager
@@ -11,7 +12,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -117,6 +120,29 @@ class Shell : ComponentActivity() {
                                 web?.reload()
                             }) { Text("Reintentar") }
                         }
+                    }
+
+                    // Ajustes de Cerrojo (apps vigiladas, cuenta, permisos de
+                    // MIUI) — no de la web. Desde que el icono del lanzador
+                    // lleva directo aqui, sin este boton esa pantalla se
+                    // quedaria sin ninguna entrada obvia. Fijo y pequeño, por
+                    // encima incluso del aviso de "sin conexión": los ajustes
+                    // de Cerrojo no dependen de la red.
+                    Box(
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(12.dp)
+                            .size(40.dp)
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f), CircleShape)
+                            .clickable {
+                                startActivity(
+                                    Intent(this@Shell, Principal::class.java)
+                                        .putExtra(Principal.EXTRA_AJUSTES, true)
+                                )
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("⚙", style = MaterialTheme.typography.titleLarge)
                     }
                 }
             }
