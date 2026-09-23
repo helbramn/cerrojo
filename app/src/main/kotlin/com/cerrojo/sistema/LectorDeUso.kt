@@ -1,11 +1,9 @@
 package com.cerrojo.sistema
 
-import android.Manifest
 import android.app.AppOpsManager
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
-import android.content.pm.PackageManager
 import android.os.Process
 import java.util.Calendar
 
@@ -21,20 +19,26 @@ class LectorDeUso(private val context: Context) {
     private var enPrimerPlano: String? = null
     private var ultimaConsultaMs = 0L
 
-    fun tienePermisoDeUso(): Boolean {
+    /**
+     * `null` significa "no se puede comprobar", no "falta". MODE_DEFAULT
+     * quiere decir "mira el permiso normal", y el permiso al que remitia
+     * (`PACKAGE_USAGE_STATS`) es `signature|appop`: una app instalada fuera de
+     * Play jamas lo tiene concedido por esa via, asi que comprobarlo solo
+     * podia devolver un negativo. Eso convertia un MODE_DEFAULT de una ROM
+     * rara —con el acceso realmente concedido— en un "falta" permanente que
+     * bloqueaba el boton "Ya estan los cinco" del asistente y el arranque del
+     * servicio en `Principal.onResume`, sin que el usuario pudiera hacer nada
+     * para arreglarlo.
+     */
+    fun tienePermisoDeUso(): Boolean? {
         val ops = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
         val modo = ops.unsafeCheckOpNoThrow(
             AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName
         )
-        // MODE_DEFAULT quiere decir "mira el permiso normal", no "denegado", y
-        // hay ROMs que lo devuelven con el acceso concedido. Darlo por negativo
-        // dejaria el latido avisando de "sin permiso" para siempre mientras el
-        // cerrojo funciona perfectamente.
-        return if (modo == AppOpsManager.MODE_DEFAULT) {
-            context.checkCallingOrSelfPermission(Manifest.permission.PACKAGE_USAGE_STATS) ==
-                PackageManager.PERMISSION_GRANTED
-        } else {
-            modo == AppOpsManager.MODE_ALLOWED
+        return when (modo) {
+            AppOpsManager.MODE_ALLOWED -> true
+            AppOpsManager.MODE_DEFAULT -> null
+            else -> false
         }
     }
 
