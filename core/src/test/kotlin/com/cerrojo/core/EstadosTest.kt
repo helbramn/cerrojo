@@ -42,7 +42,8 @@ class EstadosTest {
         assertEquals(0, despues.segSesion)
     }
 
-    @Test fun `agotar el presupuesto del dia bloquea hasta el dia siguiente`() {
+    /** Consume los 40 minutos de presupuesto del dia en cuatro sesiones. */
+    private fun sinPresupuesto(): EstadoApp {
         var e = EstadoApp()
         var ahora = 0L
         repeat(4) {
@@ -51,8 +52,50 @@ class EstadosTest {
             e = avanzar(e, Evento.Tick(false, ahora + 40 * 60_000L, hoy), limites)
             ahora += 40 * 60_000L
         }
+        return e
+    }
+
+    @Test fun `agotar el presupuesto del dia bloquea hasta el dia siguiente`() {
+        val e = sinPresupuesto()
         assertEquals(Estado.SIN_PRESUPUESTO, e.estado)
         assertEquals(40 * 60, e.segHoy)
+    }
+
+    @Test fun `salir de la app congela el reloj de sesion, no lo reinicia`() {
+        val enMarcha = tics(120, EstadoApp())
+        assertEquals(120, enMarcha.segSesion)
+
+        val fuera = tics(60, enMarcha, ahoraMs = 120_000L, enPrimerPlano = false)
+        assertEquals(120, fuera.segSesion)
+
+        // Si volver reiniciara la sesion, el limite se esquivaria saltando de
+        // app y volviendo.
+        val vuelta = tics(1, fuera, ahoraMs = 180_000L)
+        assertEquals(121, vuelta.segSesion)
+    }
+
+    @Test fun `sin presupuesto tambien se reinicia al cambiar de dia`() {
+        val agotado = sinPresupuesto()
+        val manana = avanzar(agotado, Evento.Tick(false, 0L, "2026-09-23"), limites)
+        assertEquals(Estado.LIBRE, manana.estado)
+        assertEquals(0, manana.segHoy)
+    }
+
+    @Test fun `sin presupuesto tambien se puede desbloquear con friccion`() {
+        val agotado = sinPresupuesto()
+        val desbloqueado = avanzar(agotado, Evento.Desbloqueo, limites)
+        assertEquals(Estado.EN_SESION, desbloqueado.estado)
+
+        // Los cinco minutos tienen que llegar a los dos relojes: si solo
+        // subiera el de sesion, el presupuesto del dia volveria a cortar al
+        // primer tic.
+        val casi = tics(5 * 60 - 1, desbloqueado, ahoraMs = 1_000L)
+        assertEquals(Estado.EN_SESION, casi.estado)
+    }
+
+    @Test fun `el desbloqueo no hace nada si la app no esta bloqueada`() {
+        val libre = tics(5, EstadoApp())
+        assertEquals(libre, avanzar(libre, Evento.Desbloqueo, limites))
     }
 
     @Test fun `cambiar de dia lo reinicia todo`() {
@@ -65,7 +108,7 @@ class EstadosTest {
 
     @Test fun `el desbloqueo con friccion da cinco minutos mas`() {
         val enfriando = tics(10 * 60, EstadoApp())
-        val desbloqueado = avanzar(enfriando, Evento.Desbloqueo(ahoraMs = 1_000L), limites)
+        val desbloqueado = avanzar(enfriando, Evento.Desbloqueo, limites)
         assertEquals(Estado.EN_SESION, desbloqueado.estado)
 
         val casi = tics(5 * 60 - 1, desbloqueado, ahoraMs = 2_000L)

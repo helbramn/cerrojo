@@ -16,11 +16,17 @@ data class EstadoApp(
 
 sealed interface Evento {
     data class Tick(val enPrimerPlano: Boolean, val ahoraMs: Long, val dia: String) : Evento
-    data class Desbloqueo(val ahoraMs: Long) : Evento
+
+    /** Salida de friccion: 45 s de espera con la pantalla encendida. */
+    data object Desbloqueo : Evento
 }
 
 fun avanzar(previo: EstadoApp, evento: Evento, limites: Limites): EstadoApp = when (evento) {
-    is Evento.Desbloqueo -> previo.copy(
+    // Solo desbloquea lo que esta bloqueado. Si llega dos veces seguidas, o si
+    // llega cuando el enfriamiento ya habia vencido por su cuenta, no regala
+    // otros cinco minutos: la maquina se defiende sola en vez de fiarse de que
+    // la interfaz no dispare el evento de mas.
+    is Evento.Desbloqueo -> if (!previo.bloqueada()) previo else previo.copy(
         estado = Estado.EN_SESION,
         extraSesionSeg = previo.extraSesionSeg + BONUS_DESBLOQUEO_SEG,
         extraHoySeg = previo.extraHoySeg + BONUS_DESBLOQUEO_SEG,
