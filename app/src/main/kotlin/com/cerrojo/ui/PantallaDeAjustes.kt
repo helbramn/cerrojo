@@ -65,7 +65,11 @@ fun PantallaDeAjustes() {
         item {
             val sesion = remember { Sesion(context) }
             var conectado by remember { mutableStateOf(true) }
-            LaunchedEffect(Unit) { Thread { conectado = sesion.token() != null }.start() }
+            // Se mira si hay cuenta guardada, no si el token responde ahora
+            // mismo: preguntarselo a la red haria aparecer el formulario de
+            // entrada cada vez que el usuario esta sin cobertura, pidiendole
+            // una contraseña que nadie ha invalidado.
+            LaunchedEffect(Unit) { conectado = sesion.hayCuenta() }
 
             if (!conectado) {
                 var correo by remember { mutableStateOf("") }

@@ -78,6 +78,10 @@ class EspejoDeAvisos(private val context: Context) {
     private fun avisarSiSePerdioLaSesion() {
         if (!sesion.hayCuenta() || prefs.getBoolean("sesionAvisada", false)) return
         if (sesion.token() != null) return
+        // Quedarse sin cobertura no es quedarse sin sesion. Avisar en cada
+        // tunel volveria el aviso ruido de fondo, y entonces no serviria el dia
+        // que la sesion muera de verdad.
+        if (sesion.falloFueDeRed) return
         prefs.edit().putBoolean("sesionAvisada", true).apply()
         crearCanal()
         context.getSystemService(NotificationManager::class.java)
