@@ -45,7 +45,8 @@ class EspejoDeAvisos(private val context: Context) {
         crearCanal()
         for (i in 0 until filas.length()) {
             val fila = filas.getJSONObject(i)
-            val id = fila.optString("task_id").ifEmpty { continue }
+            val id = fila.optString("task_id")
+            if (id.isEmpty()) continue
             val estado = fila.optString("status")
             val huella = estado + "|" + fila.optString("reminded_at")
             if (prefs.getString("visto:$id:$hoy", null) == huella) continue
