@@ -1,9 +1,11 @@
 package com.cerrojo.sistema
 
+import android.Manifest
 import android.app.AppOpsManager
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Process
 import java.util.Calendar
 
@@ -24,7 +26,16 @@ class LectorDeUso(private val context: Context) {
         val modo = ops.unsafeCheckOpNoThrow(
             AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName
         )
-        return modo == AppOpsManager.MODE_ALLOWED
+        // MODE_DEFAULT quiere decir "mira el permiso normal", no "denegado", y
+        // hay ROMs que lo devuelven con el acceso concedido. Darlo por negativo
+        // dejaria el latido avisando de "sin permiso" para siempre mientras el
+        // cerrojo funciona perfectamente.
+        return if (modo == AppOpsManager.MODE_DEFAULT) {
+            context.checkCallingOrSelfPermission(Manifest.permission.PACKAGE_USAGE_STATS) ==
+                PackageManager.PERMISSION_GRANTED
+        } else {
+            modo == AppOpsManager.MODE_ALLOWED
+        }
     }
 
     /**

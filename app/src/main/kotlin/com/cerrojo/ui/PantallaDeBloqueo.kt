@@ -43,8 +43,12 @@ class PantallaDeBloqueo : ComponentActivity() {
      */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // Recrear solo si el bloqueo es de OTRA app. El servicio reintenta el
+        // suyo mientras no vea esta pantalla delante, y en esos primeros
+        // segundos un recreate() reiniciaria una cuenta atras ya empezada.
+        val otraApp = intent.getStringExtra("paquete") != getIntent()?.getStringExtra("paquete")
         setIntent(intent)
-        recreate()
+        if (otraApp) recreate()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,10 +63,11 @@ class PantallaDeBloqueo : ComponentActivity() {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 var restantes by remember { mutableIntStateOf(-1) }
 
-                // Irse cancela la espera. La friccion son 45 segundos mirando
-                // esta pantalla, no 45 segundos de reloj mientras haces otra
-                // cosa: si la cuenta siguiera de fondo bastaria con pulsar,
-                // salir y volver, y el freno dejaria de frenar nada.
+                // Irse congela la espera. La friccion son 45 segundos MIRANDO
+                // esta pantalla, no 45 de reloj mientras haces otra cosa: si la
+                // cuenta siguiera de fondo bastaria con pulsar, salir y volver.
+                // Volver la reanuda donde estaba, que es justo lo que pide la
+                // spec — 45 s con la pantalla encendida.
                 LaunchedEffect(restantes, enPantalla) {
                     if (!enPantalla) {
                         if (restantes >= 0) restantes = -1
