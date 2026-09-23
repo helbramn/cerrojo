@@ -1,8 +1,10 @@
 package com.cerrojo.servicio
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -11,6 +13,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.cerrojo.core.Evento
@@ -21,6 +24,7 @@ import com.cerrojo.core.mediaDeUso
 import com.cerrojo.core.semana
 import com.cerrojo.datos.Almacen
 import com.cerrojo.sistema.LectorDeUso
+import com.cerrojo.ui.Principal
 import com.cerrojo.ui.PantallaDeBloqueo
 import java.text.SimpleDateFormat
 import java.time.Instant
@@ -42,6 +46,14 @@ private const val LATIDO_MS = 10_000L
  */
 private const val TICS_PARA_REINTENTAR_BLOQUEO = 3
 
+/**
+ * Ciclos completos de reintento (cada uno de [TICS_PARA_REINTENTAR_BLOQUEO]
+ * vueltas) en los que la app bloqueada siguio delante pese a haber pedido
+ * mostrar el bloqueo: la unica señal posible de que MIUI revoco "ventanas
+ * emergentes en segundo plano", que no se puede consultar por API.
+ */
+private const val REINTENTOS_FALLIDOS_PARA_AVISAR = 3
+
 class ServicioDeVigilancia : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var almacen: Almacen
@@ -51,6 +63,7 @@ class ServicioDeVigilancia : Service() {
     private var ultimoAvisoDeLatido = 0L
     private var bloqueoMostradoPara: String? = null
     private var ticsDesdeElBloqueo = 0
+    private var reintentosFallidosSeguidos = 0
     private val espejo by lazy { com.cerrojo.datos.EspejoDeAvisos(this) }
     private var ultimoEspejo = 0L
 
@@ -66,6 +79,10 @@ class ServicioDeVigilancia : Service() {
         lector = LectorDeUso(this)
         crearCanal()
         asegurarPrimerPlano()
+        // Defensivo ademas de en el arranque real: si el sistema alguna vez
+        // tira la alarma sin que haya habido reinicio, cada vez que el
+        // servicio vuelve a levantarse por su cuenta se reactiva sola.
+        armarVigilante(this)
         handler.post(vuelta)
     }
 
@@ -87,7 +104,11 @@ class ServicioDeVigilancia : Service() {
 
     private val vuelta = object : Runnable {
         override fun run() {
-            try { comprobar() } catch (_: Exception) { }
+            // Throwable, no Exception: un OutOfMemoryError en el camino del
+            // JSON de limites tambien tiene que dejar la vuelta viva, o el
+            // bloqueo entero se para por un fallo que no era ni una
+            // excepcion de las que se esperaban capturar.
+            try { comprobar() } catch (_: Throwable) { }
             handler.postDelayed(this, PERIODO_MS)
         }
     }
@@ -121,9 +142,19 @@ class ServicioDeVigilancia : Service() {
                     PantallaDeBloqueo.mostrar(this, paquete, nuevo.estado)
                 } else if (++ticsDesdeElBloqueo >= TICS_PARA_REINTENTAR_BLOQUEO) {
                     bloqueoMostradoPara = null
+                    // La app bloqueada seguia delante tras un ciclo entero de
+                    // reintento: la pantalla no llego a aparecer. Se cuenta
+                    // para que el latido pueda decirlo en vez de seguir
+                    // mudo mientras nada se bloquea de verdad.
+                    reintentosFallidosSeguidos++
                 }
             } else if (bloqueoMostradoPara == paquete) {
                 bloqueoMostradoPara = null
+                // Dejo de estar delante mientras se esperaba el bloqueo: o la
+                // pantalla salio y se lo llevo, o el usuario cambio de app por
+                // su cuenta. Cualquiera de los dos vale como señal de que el
+                // camino de bloqueo sigue funcionando.
+                reintentosFallidosSeguidos = 0
             }
         }
 
@@ -136,6 +167,12 @@ class ServicioDeVigilancia : Service() {
             Thread {
                 try {
                     espejo.comprobar()
+                } catch (_: Throwable) {
+                    // `espejo` es `by lazy`: su constructor corre aqui dentro,
+                    // en un hilo pelado, y comprobar() solo protege lo que
+                    // pasa DESPUES de construirlo. Sin este catch, un fallo en
+                    // la construccion (SharedPreferences corruptas, etc.) mata
+                    // el proceso, START_STICKY lo revive y el fallo se repite.
                 } finally {
                     mirandoAvisos = false
                 }
@@ -157,11 +194,19 @@ class ServicioDeVigilancia : Service() {
      *
      * Si MIUI revoca el acceso al uso —lo hace— las consultas dejan de devolver
      * eventos sin lanzar ninguna excepcion: nada se bloquearia y nada lo diria.
-     * Por eso el latido tambien vigila el permiso.
+     * Por eso el latido tambien vigila el permiso. `tienePermisoDeUso()` puede
+     * devolver null cuando el sistema no deja saberlo (MODE_DEFAULT en una ROM
+     * rara): eso no es un "falta", es "no se puede comprobar", asi que solo un
+     * `false` explicito enciende el aviso.
      */
-    private fun textoDeLatido(ahora: Long): String =
-        if (!lector.tienePermisoDeUso()) "sin permiso de uso — abre Cerrojo"
-        else "vigilando · última comprobación ${formatoHora.format(Date(ahora))}"
+    private fun textoDeLatido(ahora: Long): String = when {
+        lector.tienePermisoDeUso() == false -> "sin permiso de uso — abre Cerrojo"
+        // El contador es la unica señal posible de que "ventanas emergentes en
+        // segundo plano" se revoco: no hay API para consultarlo directamente.
+        reintentosFallidosSeguidos >= REINTENTOS_FALLIDOS_PARA_AVISAR ->
+            "el bloqueo no consigue aparecer — revisa \"mostrar sobre otras apps\""
+        else -> "vigilando · última comprobación ${formatoHora.format(Date(ahora))}"
+    }
 
     /** El dia nuevo empieza a la hora de reinicio configurada, no a medianoche. */
     private fun diaLogico(ahora: Long): String =
@@ -181,10 +226,15 @@ class ServicioDeVigilancia : Service() {
         if (recalculando) return
         val instalacion = Instant.ofEpochMilli(almacen.instaladoEl)
             .atZone(ZoneId.systemDefault()).toLocalDate()
-        val n = semana(instalacion, LocalDate.now())
+        // Un reloj que retrocede (cambio de hora, backup restaurado) puede
+        // hacer que `instaladoEl` quede en el futuro y `semana()` devuelva 0 o
+        // menos; limitesDe() exige semana >= 1 y reventaria dentro del hilo,
+        // tragado por el catch de mas abajo, dejando `limites == null` para
+        // siempre y sin bloquear nada nunca. PantallaDeAjustes ya se protegia
+        // asi para el mismo calculo.
+        val n = semana(instalacion, LocalDate.now()).coerceAtLeast(1)
         val completos = almacen.appsVigiladas().all { almacen.limites(it) != null }
         if (n == almacen.semanaDeLosLimites && completos) return
-        almacen.semanaDeLosLimites = n
         recalculando = true
         Thread {
             try {
@@ -194,9 +244,18 @@ class ServicioDeVigilancia : Service() {
                         limitesDe(mediaDeUso(lector.minutosPorDia(paquete)), n, almacen.suelo(paquete)),
                     )
                 }
-            } catch (_: Exception) {
+                // Solo se marca la semana como resuelta si el bucle entero
+                // termino sin fallos. Escribirlo antes (como estaba) daba la
+                // semana por hecha aunque el recalculo fallase a medias: con
+                // el catch vacio de debajo, un solo fallo dejaba las apps con
+                // los limites de la semana pasada hasta el lunes siguiente, en
+                // silencio.
+                almacen.semanaDeLosLimites = n
+            } catch (_: Throwable) {
                 // Una excepcion sin capturar en un Thread pelado mata el proceso
                 // entero, y START_STICKY lo reiniciaria contra el mismo fallo.
+                // Al no escribir semanaDeLosLimites aqui, la siguiente vuelta
+                // lo vuelve a intentar en vez de darlo por bueno.
             } finally {
                 recalculando = false
             }
@@ -214,6 +273,16 @@ class ServicioDeVigilancia : Service() {
             .setContentText(texto)
             .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
             .setOngoing(true)
+            // Sin esto "sin permiso de uso — abre Cerrojo" mandaba a abrir una
+            // app que tocarla no hacia nada: el propio aviso decia que hacer y
+            // luego no dejaba hacerlo.
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    this, 0,
+                    Intent(this, Principal::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                )
+            )
             .build()
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -224,8 +293,37 @@ class ServicioDeVigilancia : Service() {
     override fun onDestroy() { handler.removeCallbacks(vuelta); super.onDestroy() }
 
     companion object {
+        private const val INTERVALO_VIGILANTE_MS = 15 * 60_000L
+
         fun arrancar(context: Context) {
             context.startForegroundService(Intent(context, ServicioDeVigilancia::class.java))
+        }
+
+        /**
+         * Red de seguridad de la spec (§12): si MIUI mata el proceso y nadie
+         * abre la app ni reinicia el movil, hasta ahora no habia ningun camino
+         * de vuelta. Inexacta y repetida por el propio sistema — no hace falta
+         * SCHEDULE_EXACT_ALARM ni volver a armarla cada vez que dispara, solo
+         * en los sitios desde los que se llama (arranque del movil y arranque
+         * del propio servicio).
+         */
+        fun armarVigilante(context: Context) {
+            val am = context.getSystemService(AlarmManager::class.java) ?: return
+            val pi = PendingIntent.getBroadcast(
+                context, 0,
+                Intent(context, ReceptorDeArranque::class.java).setAction(ACCION_VIGILAR),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            // _WAKEUP, no la variante normal: un vigilante que solo dispara si
+            // el movil ya estaba despierto por otra razon no es una red de
+            // seguridad de verdad. Sigue sin hacer falta SCHEDULE_EXACT_ALARM
+            // — eso es por usar `setInexactRepeating`, no por el tipo de reloj.
+            am.setInexactRepeating(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                SystemClock.elapsedRealtime() + INTERVALO_VIGILANTE_MS,
+                INTERVALO_VIGILANTE_MS,
+                pi,
+            )
         }
     }
 }

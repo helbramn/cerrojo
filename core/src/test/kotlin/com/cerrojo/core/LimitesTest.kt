@@ -13,6 +13,12 @@ class LimitesTest {
         assertEquals(MEDIA_POR_DEFECTO_MIN, mediaDeUso(listOf(80, 90)))
     }
 
+    @Test fun `con un numero par de dias con datos la media es el promedio de los dos centrales`() {
+        // Sin este caso la rama par de mediaDeUso nunca se ejecutaba: todos
+        // los demas tests usan listas de longitud impar.
+        assertEquals(25, mediaDeUso(listOf(10, 40, 20, 30)))
+    }
+
     @Test fun `la primera semana el objetivo es la media`() {
         val l = limitesDe(media = 80, semana = 1)
         assertEquals(80, l.objetivoMin)
@@ -37,6 +43,15 @@ class LimitesTest {
         assertEquals(1, semana(juevesDeInstalacion, LocalDate.of(2026, 9, 27)))
         assertEquals(2, semana(juevesDeInstalacion, LocalDate.of(2026, 9, 28)))
         assertEquals(3, semana(juevesDeInstalacion, LocalDate.of(2026, 10, 5)))
+    }
+
+    @Test fun `un reloj que retrocede da semana cero o negativa, no revienta`() {
+        // Documenta por que revisarSemana() y PantallaDeAjustes aplican
+        // coerceAtLeast(1) al resultado: limitesDe() exige semana >= 1 y esto
+        // puede pasar de verdad (cambio de hora, backup restaurado).
+        val instalacion = LocalDate.of(2026, 9, 24)
+        assertEquals(0, semana(instalacion, LocalDate.of(2026, 9, 17)))
+        assertEquals(-1, semana(instalacion, LocalDate.of(2026, 9, 10)))
     }
 
     @Test fun `la sesion y el enfriamiento se mantienen dentro de sus topes`() {
