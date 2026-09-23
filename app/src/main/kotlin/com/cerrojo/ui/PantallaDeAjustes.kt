@@ -82,7 +82,7 @@ fun PantallaDeAjustes() {
                     )
                     OutlinedTextField(
                         value = clave, onValueChange = { clave = it },
-                        label = { Text("Contrasena") }, singleLine = true,
+                        label = { Text("Contraseña") }, singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier.fillMaxWidth(),
                     )

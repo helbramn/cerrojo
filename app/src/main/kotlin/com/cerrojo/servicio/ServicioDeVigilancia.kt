@@ -55,6 +55,9 @@ class ServicioDeVigilancia : Service() {
     private var ultimoEspejo = 0L
 
     @Volatile
+    private var mirandoAvisos = false
+
+    @Volatile
     private var recalculando = false
 
     override fun onCreate() {
@@ -111,9 +114,19 @@ class ServicioDeVigilancia : Service() {
             }
         }
 
-        if (ahora - ultimoEspejo > 5 * 60_000L) {
+        // La misma guarda que el recalculo semanal: sin ella, una red que no
+        // contesta acumularia un hilo colgado cada cinco minutos, y dos a la
+        // vez pueden notificar el mismo aviso dos veces.
+        if (ahora - ultimoEspejo > 5 * 60_000L && !mirandoAvisos) {
             ultimoEspejo = ahora
-            Thread { espejo.comprobar() }.start()
+            mirandoAvisos = true
+            Thread {
+                try {
+                    espejo.comprobar()
+                } finally {
+                    mirandoAvisos = false
+                }
+            }.start()
         }
 
         if (ahora - ultimoAvisoDeLatido > LATIDO_MS) {
