@@ -3,6 +3,13 @@
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
+    <!-- Desde API 30 una app solo ve los paquetes "visibles"; sin esto la
+         lista de PantallaDeAjustes queda practicamente vacia (solo Cerrojo) y
+         no se puede elegir ninguna app que vigilar. Sideloaded, sin politica
+         de Play que lo prohiba, y necesario tambien para que UsageStatsManager
+         no filtre por visibilidad en el camino de deteccion de primer plano. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />

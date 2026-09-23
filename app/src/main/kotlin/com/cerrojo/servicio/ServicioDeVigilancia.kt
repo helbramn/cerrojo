@@ -65,11 +65,24 @@ class ServicioDeVigilancia : Service() {
         almacen = Almacen(this)
         lector = LectorDeUso(this)
         crearCanal()
+        asegurarPrimerPlano()
+        handler.post(vuelta)
+    }
+
+    /**
+     * `startForegroundService` arma un plazo para llamar a `startForeground`
+     * que hay que cumplir CADA VEZ que se entra al servicio, no solo la
+     * primera. `Principal.onResume` llama a `arrancar()` en cada apertura de
+     * la app, casi siempre contra un servicio que ya esta corriendo: si solo
+     * se llamase desde `onCreate`, esas llamadas de `onStartCommand` no
+     * cumplirian nunca ese plazo y el sistema mataria el proceso con
+     * `RemoteServiceException` unos diez segundos despues de abrir Cerrojo.
+     */
+    private fun asegurarPrimerPlano() {
         ServiceCompat.startForeground(
             this, ID_NOTIFICACION, notificacion("arrancando…"),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
         )
-        handler.post(vuelta)
     }
 
     private val vuelta = object : Runnable {
@@ -203,7 +216,10 @@ class ServicioDeVigilancia : Service() {
             .setOngoing(true)
             .build()
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int) = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        asegurarPrimerPlano()
+        return START_STICKY
+    }
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onDestroy() { handler.removeCallbacks(vuelta); super.onDestroy() }
 
