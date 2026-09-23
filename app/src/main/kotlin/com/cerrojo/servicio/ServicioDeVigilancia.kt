@@ -51,6 +51,8 @@ class ServicioDeVigilancia : Service() {
     private var ultimoAvisoDeLatido = 0L
     private var bloqueoMostradoPara: String? = null
     private var ticsDesdeElBloqueo = 0
+    private val espejo by lazy { com.cerrojo.datos.EspejoDeAvisos(this) }
+    private var ultimoEspejo = 0L
 
     @Volatile
     private var recalculando = false
@@ -107,6 +109,11 @@ class ServicioDeVigilancia : Service() {
             } else if (bloqueoMostradoPara == paquete) {
                 bloqueoMostradoPara = null
             }
+        }
+
+        if (ahora - ultimoEspejo > 5 * 60_000L) {
+            ultimoEspejo = ahora
+            Thread { espejo.comprobar() }.start()
         }
 
         if (ahora - ultimoAvisoDeLatido > LATIDO_MS) {

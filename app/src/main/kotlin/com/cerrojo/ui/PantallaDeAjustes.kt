@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -21,6 +22,7 @@ import kotlinx.coroutines.withContext
 import com.cerrojo.core.limitesDe
 import com.cerrojo.core.mediaDeUso
 import com.cerrojo.datos.Almacen
+import com.cerrojo.datos.Sesion
 import com.cerrojo.sistema.LectorDeUso
 
 private data class AppInstalada(val paquete: String, val nombre: String, val deUsuario: Boolean)
@@ -59,6 +61,36 @@ fun PantallaDeAjustes() {
                 onClick = { context.startActivity(Intent(context, Shell::class.java)) },
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Abrir Disciplina") }
+        }
+        item {
+            val sesion = remember { Sesion(context) }
+            var conectado by remember { mutableStateOf(true) }
+            LaunchedEffect(Unit) { Thread { conectado = sesion.token() != null }.start() }
+
+            if (!conectado) {
+                var correo by remember { mutableStateOf("") }
+                var clave by remember { mutableStateOf("") }
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        "Conecta tu cuenta para recibir los avisos",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    OutlinedTextField(
+                        value = correo, onValueChange = { correo = it },
+                        label = { Text("Correo") }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = clave, onValueChange = { clave = it },
+                        label = { Text("Contrasena") }, singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Button(onClick = {
+                        Thread { conectado = sesion.entrar(correo, clave) }.start()
+                    }) { Text("Entrar") }
+                }
+            }
         }
         item {
             Text("Apps vigiladas", style = MaterialTheme.typography.headlineSmall)
