@@ -42,13 +42,16 @@ class Sesion(context: Context) {
     }
 
     /**
-     * El ultimo fallo fue de red (sin cobertura, tiempo agotado) y no un
-     * rechazo del servidor. Distinguirlos importa: quedarse sin cobertura no
-     * es quedarse sin sesion, y confundirlos llevaria a avisar de que la
-     * cuenta murio cada vez que el usuario entra en un tunel.
+     * Por que fallo la ultima peticion. Un booleano no bastaba: hay que
+     * separar "no hubo servidor" de "el servidor dijo que no" y de "el
+     * servidor tuvo un problema suyo". Solo el segundo significa que la sesion
+     * murio; tratar los otros dos igual borraria la cuenta por un tunel o por
+     * un hipo de Supabase.
      */
+    enum class Fallo { NINGUNO, SIN_RED, RECHAZADA, DEL_SERVIDOR }
+
     @Volatile
-    var falloFueDeRed = false
+    var ultimoFallo = Fallo.NINGUNO
         private set
 
     /** Hay sesion guardada, aunque su token haya caducado. */
@@ -76,19 +79,18 @@ class Sesion(context: Context) {
         if (System.currentTimeMillis() < caduca - 60_000L) return@synchronized p.getString("access", null)
         val refresco = p.getString("refresh", null) ?: return@synchronized null
         val cuerpo = JSONObject().put("refresh_token", refresco).toString()
+        // Aqui NO se borra nada. Conseguir un token y decidir que la sesion
+        // esta muerta son dos cosas distintas: al mezclarlas, el borrado se
+        // adelantaba al aviso y quien tenia que avisar ya no encontraba cuenta
+        // de la que avisar.
         val respuesta = post("/auth/v1/token?grant_type=refresh_token", cuerpo)
-        if (respuesta == null) {
-            // La cuenta solo se olvida si el servidor la rechazo de verdad. Un
-            // fallo de red no es una sesion muerta: cuando vuelva la cobertura,
-            // el mismo token de refresco seguira valiendo.
-            if (!falloFueDeRed) olvidar()
-            return@synchronized null
-        }
+            ?: return@synchronized null
         guardar(respuesta)
         p.getString("access", null)
     }
 
-    private fun olvidar() {
+    /** Solo debe llamarlo quien ya haya avisado al usuario. */
+    fun olvidar() {
         prefs?.edit()?.clear()?.apply()
     }
 
@@ -112,11 +114,11 @@ class Sesion(context: Context) {
             doOutput = true
             outputStream.use { it.write(cuerpo.toByteArray()) }
         }
-        // Que conteste, aunque sea que no, significa que hubo red.
-        falloFueDeRed = false
-        if (c.responseCode in 200..299) JSONObject(c.inputStream.bufferedReader().readText()) else null
+        val codigo = c.responseCode
+        ultimoFallo = motivo(codigo)
+        if (codigo in 200..299) JSONObject(c.inputStream.bufferedReader().readText()) else null
     } catch (_: Exception) {
-        falloFueDeRed = true
+        ultimoFallo = Fallo.SIN_RED
         null
     }
 
@@ -128,10 +130,22 @@ class Sesion(context: Context) {
             setRequestProperty("apikey", CLAVE_PUBLICABLE)
             setRequestProperty("Authorization", "Bearer $t")
         }
-        falloFueDeRed = false
-        if (c.responseCode in 200..299) c.inputStream.bufferedReader().readText() else null
+        val codigo = c.responseCode
+        ultimoFallo = motivo(codigo)
+        if (codigo in 200..299) c.inputStream.bufferedReader().readText() else null
     } catch (_: Exception) {
-        falloFueDeRed = true
+        ultimoFallo = Fallo.SIN_RED
         null
+    }
+
+    /**
+     * Un 500 o un limite de peticiones no son una sesion muerta: son problemas
+     * del servidor, y pasaran. Solo un rechazo explicito de las credenciales
+     * cuenta como sesion perdida.
+     */
+    private fun motivo(codigo: Int): Fallo = when {
+        codigo in 200..299 -> Fallo.NINGUNO
+        codigo in 400..403 -> Fallo.RECHAZADA
+        else -> Fallo.DEL_SERVIDOR
     }
 }
