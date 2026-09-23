@@ -20,14 +20,23 @@ class Almacen(context: Context) {
     fun guardarAppsVigiladas(paquetes: List<String>) =
         prefs.edit().putStringSet("apps", paquetes.toSet()).apply()
 
+    /**
+     * Un valor corrupto o de una version anterior degrada al estado por
+     * defecto, nunca revienta: esto lo lee el servicio de vigilancia una vez
+     * por segundo, y una excepcion ahi mataria al hilo encargado de bloquear.
+     * Perder el estado de una app es malo; dejar de vigilar es peor.
+     */
     fun estado(paquete: String): EstadoApp =
-        prefs.getString("estado:$paquete", null)?.let { json.decodeFromString(it) } ?: EstadoApp()
+        prefs.getString("estado:$paquete", null)
+            ?.let { runCatching { json.decodeFromString<EstadoApp>(it) }.getOrNull() }
+            ?: EstadoApp()
 
     fun guardarEstado(paquete: String, estado: EstadoApp) =
         prefs.edit().putString("estado:$paquete", json.encodeToString(estado)).apply()
 
     fun limites(paquete: String): Limites? =
-        prefs.getString("limites:$paquete", null)?.let { json.decodeFromString(it) }
+        prefs.getString("limites:$paquete", null)
+            ?.let { runCatching { json.decodeFromString<Limites>(it) }.getOrNull() }
 
     fun guardarLimites(paquete: String, limites: Limites) =
         prefs.edit().putString("limites:$paquete", json.encodeToString(limites)).apply()
