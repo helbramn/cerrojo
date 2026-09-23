@@ -10,6 +10,7 @@ const val SUELO_POR_DEFECTO_MIN = 20
 const val MEDIA_POR_DEFECTO_MIN = 30
 const val DIAS_MINIMOS_DE_HISTORIAL = 3
 
+@kotlinx.serialization.Serializable
 data class Limites(
     val objetivoMin: Int,
     val sesionMin: Int,

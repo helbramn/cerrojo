@@ -4,6 +4,7 @@ const val BONUS_DESBLOQUEO_SEG = 5 * 60
 
 enum class Estado { LIBRE, EN_SESION, ENFRIANDO, SIN_PRESUPUESTO }
 
+@kotlinx.serialization.Serializable
 data class EstadoApp(
     val estado: Estado = Estado.LIBRE,
     val segSesion: Int = 0,

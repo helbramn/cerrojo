@@ -1,7 +1,12 @@
-plugins { alias(libs.plugins.kotlin.jvm) }
+plugins {
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.serialization)
+}
 kotlin { jvmToolchain(17) }
-dependencies { testImplementation(libs.junit) }
-
+dependencies {
+    implementation(libs.kotlinx.serialization.json)
+    testImplementation(libs.junit)
+}
 tasks.test {
     testLogging {
         events("passed", "skipped", "failed")
