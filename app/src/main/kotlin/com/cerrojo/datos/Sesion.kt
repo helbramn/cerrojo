@@ -129,6 +129,12 @@ class Sesion(context: Context) {
     }
 
     fun obtener(ruta: String): String? = try {
+        // Se borra el motivo al empezar. Si el token en cache sigue valiendo,
+        // post() no llega a ejecutarse y el motivo se quedaria con el de un
+        // ciclo anterior — incluso con un RECHAZADA de antes de que el usuario
+        // volviera a entrar. Quien lo lea despues creeria que la sesion acaba
+        // de morir y borraria unas credenciales recien puestas.
+        ultimoFalloDeSesion = Fallo.NINGUNO
         val t = token() ?: return null
         val c = (URL(SUPABASE_URL + ruta).openConnection() as HttpURLConnection).apply {
             connectTimeout = ESPERA_CONEXION_MS
