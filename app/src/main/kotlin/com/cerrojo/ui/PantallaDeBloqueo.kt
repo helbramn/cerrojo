@@ -63,11 +63,14 @@ class PantallaDeBloqueo : ComponentActivity() {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 var restantes by remember { mutableIntStateOf(-1) }
 
-                // Irse congela la espera. La friccion son 45 segundos MIRANDO
-                // esta pantalla, no 45 de reloj mientras haces otra cosa: si la
-                // cuenta siguiera de fondo bastaria con pulsar, salir y volver.
-                // Volver la reanuda donde estaba, que es justo lo que pide la
-                // spec — 45 s con la pantalla encendida.
+                // Irse no congela la espera: la cancela (restantes = -1, mas
+                // abajo). La friccion son 45 segundos MIRANDO esta pantalla,
+                // no 45 de reloj mientras haces otra cosa: si la cuenta
+                // siguiera de fondo, o si volver la reanudase donde se quedo,
+                // bastaria con pulsar, salir y volver para saltarse casi todo
+                // el tiempo. Volver la empieza de cero: mas estricto que lo
+                // que pide la spec, pero cumple de sobra los 45 s con la
+                // pantalla encendida.
                 LaunchedEffect(restantes, enPantalla) {
                     if (!enPantalla) {
                         if (restantes >= 0) restantes = -1

@@ -79,4 +79,14 @@ class Almacen(context: Context) {
     var ultimaComprobacionMs: Long
         get() = prefs.getLong("latido", 0L)
         set(valor) = prefs.edit().putLong("latido", valor).apply()
+
+    /**
+     * Ultima vez que el espejo de avisos leyo `task_logs` con exito (con filas
+     * o sin ellas). Sin esto, un cambio de esquema o un error de PostgREST
+     * paraba el reenganche entero sin dejar ningun rastro visible: el catch
+     * vacio de `EspejoDeAvisos.comprobar()` se lo tragaba en total silencio.
+     */
+    var ultimoEspejoOkMs: Long
+        get() = prefs.getLong("espejoOk", 0L)
+        set(valor) = prefs.edit().putLong("espejoOk", valor).apply()
 }

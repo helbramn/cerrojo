@@ -74,6 +74,8 @@ fun PantallaDeAjustes() {
             if (!conectado) {
                 var correo by remember { mutableStateOf("") }
                 var clave by remember { mutableStateOf("") }
+                var entrando by remember { mutableStateOf(false) }
+                var error by remember { mutableStateOf(false) }
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
                         "Conecta tu cuenta para recibir los avisos",
@@ -90,9 +92,35 @@ fun PantallaDeAjustes() {
                         visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    Button(onClick = {
-                        Thread { conectado = sesion.entrar(correo, clave) }.start()
-                    }) { Text("Entrar") }
+                    Button(
+                        enabled = !entrando,
+                        onClick = {
+                            error = false
+                            entrando = true
+                            // En una coroutine, no en un Thread pelado: el
+                            // Thread anterior asignaba `conectado` (estado de
+                            // Compose) desde fuera del hilo principal, que no
+                            // esta soportado. withContext(IO) hace el trabajo
+                            // de red fuera y devuelve la asignacion al hilo
+                            // principal al volver.
+                            alcance.launch {
+                                val ok = withContext(Dispatchers.IO) { sesion.entrar(correo, clave) }
+                                entrando = false
+                                if (ok) conectado = true else error = true
+                            }
+                        },
+                    ) { Text(if (entrando) "Entrando…" else "Entrar") }
+                    if (error) {
+                        // Antes, una contraseña equivocada dejaba `conectado`
+                        // en `false` (ya lo estaba): la pantalla no cambiaba
+                        // nada y no habia forma de distinguir un fallo de
+                        // credenciales de un boton roto o una red lenta.
+                        Text(
+                            "No se pudo entrar: revisa el correo y la contraseña.",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                 }
             }
         }
@@ -113,6 +141,16 @@ fun PantallaDeAjustes() {
             Text(
                 if (latido == 0L) "El servicio aún no ha dado señales"
                 else "Última comprobación hace ${(ahora - latido) / 1000} s",
+                style = MaterialTheme.typography.labelMedium,
+            )
+            // Sin esta linea, un espejo de avisos atascado (esquema cambiado,
+            // PostgREST fallando, o incluso una consulta colgada que deja su
+            // guarda interna sin liberarse nunca) fallaba en total silencio:
+            // el reenganche dejaba de avisar y nada en la pantalla lo decia.
+            val espejoOk = almacen.ultimoEspejoOkMs
+            Text(
+                if (espejoOk == 0L) "El espejo de avisos aún no ha leído nada con éxito"
+                else "Último espejo de avisos con éxito hace ${(ahora - espejoOk) / 1000} s",
                 style = MaterialTheme.typography.labelMedium,
             )
 

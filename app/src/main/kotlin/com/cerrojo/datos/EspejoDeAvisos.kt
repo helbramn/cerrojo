@@ -2,19 +2,43 @@ package com.cerrojo.datos
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import androidx.core.app.NotificationCompat
+import com.cerrojo.ui.Principal
+import com.cerrojo.ui.Shell
 import org.json.JSONArray
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 private const val CANAL = "reenganche"
 private const val AVISO_SESION = -1
 
+/**
+ * La web trata Europe/Madrid como una regla fija (`src/lib/dates.ts`), no la
+ * zona del dispositivo, precisamente para que el movil y la Edge Function
+ * coincidan por construccion y no por casualidad. Sin esto, un telefono con
+ * otro huso —o solo mal ajustado— pediria el "hoy" equivocado a `task_logs` y
+ * el espejo nunca veria las filas del dia que la web y el reenganche si ven.
+ */
+private val ZONA = TimeZone.getTimeZone("Europe/Madrid")
+
 class EspejoDeAvisos(private val context: Context) {
     private val sesion = Sesion(context)
+    private val almacen = Almacen(context)
     private val prefs = context.getSharedPreferences("espejo", Context.MODE_PRIVATE)
+
+    private fun pendingIntent(destino: Class<*>, ajustes: Boolean = false): PendingIntent =
+        PendingIntent.getActivity(
+            context, if (ajustes) 1 else 0,
+            Intent(context, destino)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                .putExtra(Principal.EXTRA_AJUSTES, ajustes),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
 
     /**
      * Todo va dentro de un try: esto corre en un hilo pelado lanzado por el
@@ -29,7 +53,9 @@ class EspejoDeAvisos(private val context: Context) {
     }
 
     private fun comprobarDeVerdad() {
-        val hoy = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+        val hoy = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+            .apply { timeZone = ZONA }
+            .format(Date())
         olvidarDiasPasados(hoy)
 
         val json = sesion.obtener(
@@ -39,6 +65,11 @@ class EspejoDeAvisos(private val context: Context) {
             avisarSiSePerdioLaSesion()
             return
         }
+        // Se lee con exito, con filas o sin ellas: es la unica señal de que
+        // el espejo sigue funcionando de verdad. Sin ella, un cambio de
+        // esquema o un error de PostgREST paraba el reenganche entero sin
+        // dejar ningun rastro visible en Ajustes.
+        almacen.ultimoEspejoOkMs = System.currentTimeMillis()
         prefs.edit().putBoolean("sesionAvisada", false).apply()
         val filas = JSONArray(json)
 
@@ -66,6 +97,10 @@ class EspejoDeAvisos(private val context: Context) {
                     .setContentText(texto)
                     .setSmallIcon(android.R.drawable.ic_dialog_alert)
                     .setAutoCancel(true)
+                    // El reenganche existe para que se pueda actuar sobre el
+                    // aviso, no solo leerlo: sin esto, "¿A que esperas?" no
+                    // llevaba a ningun sitio.
+                    .setContentIntent(pendingIntent(Shell::class.java))
                     .build())
         }
     }
@@ -103,6 +138,11 @@ class EspejoDeAvisos(private val context: Context) {
                 .setContentText("Se perdió la conexión con tu cuenta: entra en Ajustes para reconectarla.")
                 .setSmallIcon(android.R.drawable.ic_dialog_alert)
                 .setAutoCancel(true)
+                // "Entra en Ajustes" tiene que llevar a Ajustes de verdad, no a
+                // Principal a secas: desde el arranque directo a Shell (spec
+                // de Principal), eso rebotaria a la web sin pasar por el
+                // formulario de entrada que el aviso promete.
+                .setContentIntent(pendingIntent(Principal::class.java, ajustes = true))
                 .build())
     }
 
