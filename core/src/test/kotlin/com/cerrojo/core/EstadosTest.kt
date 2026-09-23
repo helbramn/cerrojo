@@ -28,12 +28,16 @@ class EstadosTest {
     @Test fun `agotar la sesion pasa a enfriamiento`() {
         val e = tics(10 * 60, EstadoApp())
         assertEquals(Estado.ENFRIANDO, e.estado)
-        assertEquals(40 * 60_000L, e.finEnfriamientoMs)
+        // El enfriamiento cuenta desde el instante del tic que agota la sesion.
+        // Los 600 tics van de 0 a 599_000 ms, asi que ese instante es 599_000,
+        // no 600_000: el reloj arranca en el primer tic, no antes.
+        assertEquals(599_000L + 40 * 60_000L, e.finEnfriamientoMs)
     }
 
     @Test fun `cumplido el enfriamiento vuelve a estar libre con la sesion a cero`() {
         val enfriando = tics(10 * 60, EstadoApp())
-        val despues = avanzar(enfriando, Evento.Tick(false, 40 * 60_000L, hoy), limites)
+        // Justo en el instante de vencimiento ya esta libre, no un tic despues.
+        val despues = avanzar(enfriando, Evento.Tick(false, enfriando.finEnfriamientoMs, hoy), limites)
         assertEquals(Estado.LIBRE, despues.estado)
         assertEquals(0, despues.segSesion)
     }
