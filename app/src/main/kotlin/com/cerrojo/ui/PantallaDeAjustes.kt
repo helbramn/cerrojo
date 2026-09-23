@@ -1,6 +1,7 @@
 package com.cerrojo.ui
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
@@ -53,6 +54,12 @@ fun PantallaDeAjustes() {
     }
 
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item {
+            Button(
+                onClick = { context.startActivity(Intent(context, Shell::class.java)) },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Abrir Disciplina") }
+        }
         item {
             Text("Apps vigiladas", style = MaterialTheme.typography.headlineSmall)
 
