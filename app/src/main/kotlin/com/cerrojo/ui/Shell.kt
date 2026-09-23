@@ -16,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.cerrojo.datos.Almacen
@@ -90,6 +91,17 @@ class Shell : ComponentActivity() {
                             Modifier
                                 .fillMaxSize()
                                 .background(MaterialTheme.colorScheme.background)
+                                // Pintar un fondo no se come los toques: sin
+                                // esto, tocar fuera del boton llegaria al
+                                // WebView de debajo y se podria navegar o
+                                // enviar algo en una pagina que no se ve.
+                                .pointerInput(Unit) {
+                                    awaitPointerEventScope {
+                                        while (true) {
+                                            awaitPointerEvent().changes.forEach { it.consume() }
+                                        }
+                                    }
+                                }
                                 .padding(32.dp),
                             verticalArrangement = Arrangement.Center,
                             horizontalAlignment = Alignment.CenterHorizontally,
