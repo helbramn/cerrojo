@@ -8,6 +8,8 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -21,10 +23,35 @@ import kotlinx.coroutines.delay
 private const val SEGUNDOS_DE_FRICCION = 45
 
 class PantallaDeBloqueo : ComponentActivity() {
+    /** Compose lo lee para parar la cuenta atras cuando la pantalla deja de verse. */
+    private var enPantalla by mutableStateOf(true)
+
+    override fun onStart() {
+        super.onStart()
+        enPantalla = true
+    }
+
+    override fun onStop() {
+        super.onStop()
+        enPantalla = false
+    }
+
+    /**
+     * `singleTask` reutiliza la instancia viva. Sin esto, el bloqueo de OTRA
+     * app reaprovecharia esta pantalla mostrando el nombre y el mensaje de la
+     * anterior, y el boton de desbloquear liberaria la que no era.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        recreate()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val paquete = intent.getStringExtra("paquete") ?: return finish()
-        val estado = Estado.valueOf(intent.getStringExtra("estado") ?: Estado.ENFRIANDO.name)
+        val estado = runCatching { Estado.valueOf(intent.getStringExtra("estado")!!) }
+            .getOrDefault(Estado.ENFRIANDO)
         val almacen = Almacen(this)
         val nombre = nombreDeApp(paquete)
 
@@ -32,7 +59,15 @@ class PantallaDeBloqueo : ComponentActivity() {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 var restantes by remember { mutableIntStateOf(-1) }
 
-                LaunchedEffect(restantes) {
+                // Irse cancela la espera. La friccion son 45 segundos mirando
+                // esta pantalla, no 45 segundos de reloj mientras haces otra
+                // cosa: si la cuenta siguiera de fondo bastaria con pulsar,
+                // salir y volver, y el freno dejaria de frenar nada.
+                LaunchedEffect(restantes, enPantalla) {
+                    if (!enPantalla) {
+                        if (restantes >= 0) restantes = -1
+                        return@LaunchedEffect
+                    }
                     if (restantes > 0) { delay(1000); restantes -= 1 }
                     else if (restantes == 0) {
                         val limites = almacen.limites(paquete) ?: limitesDe(30, 1)
