@@ -47,10 +47,13 @@ class Principal : ComponentActivity() {
                         almacen.asistenteHecho = true
                         hecho = true
                     })
-                } else if (abrirAjustes) {
-                    // Entrada explicita desde Shell, no el arranque por icono:
-                    // aqui es donde vive de verdad la lista de apps vigiladas
-                    // y la cuenta.
+                } else if (abrirAjustes || almacen.appsVigiladas().isEmpty()) {
+                    // Entrada explicita desde Shell, o recien salido del
+                    // asistente sin ninguna app elegida todavia: aqui es donde
+                    // vive de verdad la lista de apps vigiladas y la cuenta.
+                    // Sin esto se entraba en la app de disciplina sin haber
+                    // vigilado nada, y el bucle del servicio no tenia sobre
+                    // que actuar.
                     PantallaDeAjustes()
                 } else {
                     // El icono del lanzador tiene que llevar a la app de

@@ -194,10 +194,10 @@ class ServicioDeVigilancia : Service() {
      *
      * Si MIUI revoca el acceso al uso —lo hace— las consultas dejan de devolver
      * eventos sin lanzar ninguna excepcion: nada se bloquearia y nada lo diria.
-     * Por eso el latido tambien vigila el permiso. `tienePermisoDeUso()` puede
-     * devolver null cuando el sistema no deja saberlo (MODE_DEFAULT en una ROM
-     * rara): eso no es un "falta", es "no se puede comprobar", asi que solo un
-     * `false` explicito enciende el aviso.
+     * Por eso el latido tambien vigila el permiso. `tienePermisoDeUso()` prueba
+     * el acceso real cuando el sistema esta en MODE_DEFAULT, asi que aqui solo
+     * llega `null` si el propio metodo llegara a cambiar; con el permiso
+     * realmente denegado siempre da `false` y enciende el aviso.
      */
     private fun textoDeLatido(ahora: Long): String = when {
         lector.tienePermisoDeUso() == false -> "sin permiso de uso — abre Cerrojo"

@@ -20,15 +20,13 @@ class LectorDeUso(private val context: Context) {
     private var ultimaConsultaMs = 0L
 
     /**
-     * `null` significa "no se puede comprobar", no "falta". MODE_DEFAULT
-     * quiere decir "mira el permiso normal", y el permiso al que remitia
-     * (`PACKAGE_USAGE_STATS`) es `signature|appop`: una app instalada fuera de
-     * Play jamas lo tiene concedido por esa via, asi que comprobarlo solo
-     * podia devolver un negativo. Eso convertia un MODE_DEFAULT de una ROM
-     * rara —con el acceso realmente concedido— en un "falta" permanente que
-     * bloqueaba el boton "Ya estan los cinco" del asistente y el arranque del
-     * servicio en `Principal.onResume`, sin que el usuario pudiera hacer nada
-     * para arreglarlo.
+     * El tipo se queda en `Boolean?` porque las llamadas ya tratan `null` como
+     * "no bloquear", pero esta funcion ya no devuelve `null`. `MODE_DEFAULT`
+     * es el modo por defecto de `OP_GET_USAGE_STATS` en AOSP: es el estado
+     * normal de "nunca concedido", no uno indescifrable. En vez de adivinar
+     * que significa, se prueba de verdad: se pide una consulta de uso real y
+     * se mira si trae algo. Eso comprueba exactamente la capacidad que
+     * importa y no puede equivocarse en ningun sentido.
      */
     fun tienePermisoDeUso(): Boolean? {
         val ops = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
@@ -37,9 +35,21 @@ class LectorDeUso(private val context: Context) {
         )
         return when (modo) {
             AppOpsManager.MODE_ALLOWED -> true
-            AppOpsManager.MODE_DEFAULT -> null
+            AppOpsManager.MODE_DEFAULT -> probarAccesoReal()
             else -> false
         }
+    }
+
+    /**
+     * Corre en el hilo del servicio de vigilancia: cualquier excepcion aqui
+     * degrada a "no tiene permiso" en vez de tumbar el proceso.
+     */
+    private fun probarAccesoReal(): Boolean = try {
+        val ahora = System.currentTimeMillis()
+        val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, ahora - 24 * 60 * 60 * 1000L, ahora)
+        !stats.isNullOrEmpty()
+    } catch (_: Exception) {
+        false
     }
 
     /**
