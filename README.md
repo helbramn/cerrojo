@@ -1,17 +1,16 @@
 # Cerrojo
 
-App Android para bloquear otras apps por tiempo de uso, con la web de disciplina
-(`app-disciplina`) embebida en un WebView.
+Bloqueo de apps por tiempo de uso para Android, con límites que se calculan
+a partir del uso real y bajan un 10 % cada semana. Incluye dentro la app de
+disciplina.
 
-## Módulos
+## Instalar en el móvil
 
-- `:core` — lógica pura en Kotlin (JVM), sin dependencias de Android.
-- `:app` — app Android.
+1. Abre la última release desde el móvil: https://github.com/helbramn/cerrojo/releases/latest
+2. Descarga el `.apk` y ábrelo. Android pedirá permiso para instalar de esta fuente.
+3. Al abrir la app por primera vez, pasa los cinco permisos de MIUI que te pide.
 
 ## Desarrollo
 
-Requiere JDK 17. Sin Gradle instalado, usa el wrapper:
-
-```bash
-./gradlew :core:test :app:assembleDebug
-```
+No hace falta Android Studio ni el SDK: todo se compila en GitHub Actions.
+`./gradlew :core:test` corre los tests del motor; el resto se verifica en el móvil.
