@@ -1,6 +1,6 @@
 <!-- Negro casi puro con un halo calido detras del sigilo, para que la silueta
      dorada no se pierda sobre un fondo de pantalla oscuro. Es la paleta de la
-     web: --background #060404 y --gold #b8945a. -->
+     web: el negro de fondo #060404 y el dorado #b8945a. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
