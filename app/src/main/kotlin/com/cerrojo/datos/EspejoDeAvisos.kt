@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
+import com.cerrojo.R
 import com.cerrojo.ui.Principal
 import com.cerrojo.ui.Shell
 import org.json.JSONArray
@@ -95,7 +96,7 @@ class EspejoDeAvisos(private val context: Context) {
                 .notify(id.hashCode(), NotificationCompat.Builder(context, CANAL)
                     .setContentTitle("Disciplina")
                     .setContentText(texto)
-                    .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                    .setSmallIcon(R.drawable.ic_aviso)
                     .setAutoCancel(true)
                     // El reenganche existe para que se pueda actuar sobre el
                     // aviso, no solo leerlo: sin esto, "¿A que esperas?" no
@@ -136,7 +137,7 @@ class EspejoDeAvisos(private val context: Context) {
             .notify(AVISO_SESION, NotificationCompat.Builder(context, CANAL)
                 .setContentTitle("Cerrojo")
                 .setContentText("Se perdió la conexión con tu cuenta: entra en Ajustes para reconectarla.")
-                .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                .setSmallIcon(R.drawable.ic_aviso)
                 .setAutoCancel(true)
                 // "Entra en Ajustes" tiene que llevar a Ajustes de verdad, no a
                 // Principal a secas: desde el arranque directo a Shell (spec

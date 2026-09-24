@@ -15,6 +15,7 @@ import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import androidx.core.app.NotificationCompat
+import com.cerrojo.R
 import androidx.core.app.ServiceCompat
 import com.cerrojo.core.Evento
 import com.cerrojo.core.bloqueada
@@ -271,7 +272,7 @@ class ServicioDeVigilancia : Service() {
         NotificationCompat.Builder(this, CANAL)
             .setContentTitle("Cerrojo")
             .setContentText(texto)
-            .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
+            .setSmallIcon(R.drawable.ic_aviso)
             .setOngoing(true)
             // Sin esto "sin permiso de uso — abre Cerrojo" mandaba a abrir una
             // app que tocarla no hacia nada: el propio aviso decia que hacer y
