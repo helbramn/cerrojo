@@ -6,7 +6,7 @@ disciplina.
 
 ## Instalar en el móvil
 
-1. Abre la última release desde el móvil: https://github.com/helbramn/cerrojo/releases/latest
+1. Abre la última release desde el móvil: https://github.com/helbramn/seal/releases/latest
 2. Descarga el `.apk` y ábrelo. Android pedirá permiso para instalar de esta fuente.
 3. Al abrir la app por primera vez, pasa los cinco permisos de MIUI que te pide.
 
@@ -43,5 +43,5 @@ No hace falta Android Studio ni el SDK: todo se compila en GitHub Actions.
 
 - [`docs/errores-y-arreglos.md`](docs/errores-y-arreglos.md) — todos los fallos
   que ha tenido esto y cómo se arreglaron.
-- [Historial de versiones](https://github.com/helbramn/cerrojo/releases) — una
+- [Historial de versiones](https://github.com/helbramn/seal/releases) — una
   release por versión, con su APK. Una versión publicada no se vuelve a tocar.
