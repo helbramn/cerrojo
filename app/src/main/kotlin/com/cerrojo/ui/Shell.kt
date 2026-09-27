@@ -23,6 +23,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.cerrojo.datos.Almacen
+import com.cerrojo.datos.Sesion
+import java.net.URLEncoder
 
 class Shell : ComponentActivity() {
     private var web: WebView? = null
@@ -36,6 +38,7 @@ class Shell : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val url = Almacen(this).urlWeb
+        val primeraCarga = urlDeEntrada(url)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -48,7 +51,7 @@ class Shell : ComponentActivity() {
         })
 
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
+            TemaDeSeal {
                 // El WebView se queda montado SIEMPRE y el aviso de sin
                 // conexion se pinta encima. Si se desmontara, reintentar
                 // significaria crear otro desde cero: se perderia la posicion,
@@ -77,8 +80,12 @@ class Shell : ComponentActivity() {
                                         if (req.isForMainFrame) sinConexion = true
                                     }
                                 }
+                                // El WebView pinta blanco hasta que la pagina
+                                // se dibuja. Sobre un tema negro eso es un
+                                // fogonazo en cada apertura.
+                                setBackgroundColor(0xFF060404.toInt())
                                 web = this
-                                loadUrl(url)
+                                loadUrl(primeraCarga)
                             }
                         },
                         // Sin esto el WebView se queda con sus recursos nativos
@@ -147,6 +154,23 @@ class Shell : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * Si Seal acaba de iniciar sesion, la web se abre por una ruta que recibe
+     * los tokens y los planta como sesion del navegador. Asi solo se entra una
+     * vez: en Seal.
+     *
+     * Van en el fragmento de la URL (detras de #) a proposito. El fragmento no
+     * viaja al servidor, asi que los tokens no acaban en los registros de
+     * Vercel; es el mismo sitio donde los pone Supabase en sus propios enlaces
+     * de acceso.
+     */
+    private fun urlDeEntrada(url: String): String {
+        val entrega = Sesion(this).tomarEntregaParaWeb() ?: return url
+        fun cod(v: String) = URLEncoder.encode(v, "UTF-8")
+        return url.trimEnd('/') + "/auth/sesion-movil#access_token=" +
+            cod(entrega.first) + "&refresh_token=" + cod(entrega.second)
     }
 
     override fun onPause() {

@@ -70,7 +70,37 @@ class Sesion(context: Context) {
         val cuerpo = JSONObject().put("email", email).put("password", password).toString()
         val respuesta = post("/auth/v1/token?grant_type=password", cuerpo) ?: return false
         guardar(respuesta)
+        // Segunda sesion, INDEPENDIENTE, para el WebView. Supabase rota el
+        // token de refresco en cada uso y trata su reutilizacion como un robo:
+        // si el movil y la web compartieran el mismo, el primero que refrescara
+        // dejaria al otro fuera. Dos sesiones distintas de la misma cuenta no
+        // se pisan.
+        //
+        // La contraseña no se guarda en ningun sitio: se usa aqui las dos veces
+        // y se olvida. El WebView persiste luego su propia sesion en sus
+        // cookies, asi que solo hace falta una vez.
+        val paraWeb = post("/auth/v1/token?grant_type=password", cuerpo)
+        if (paraWeb != null) {
+            prefs.edit()
+                .putString("web_access", paraWeb.getString("access_token"))
+                .putString("web_refresh", paraWeb.getString("refresh_token"))
+                .apply()
+        }
         return true
+    }
+
+    /**
+     * Los tokens que le tocan al WebView, una sola vez. Se borran al leerlos:
+     * si se quedaran guardados, cada apertura de la pantalla web volveria a
+     * plantar la misma sesion —ya caducada— encima de la que el WebView haya
+     * ido refrescando por su cuenta, y lo tiraria a la pantalla de entrada.
+     */
+    fun tomarEntregaParaWeb(): Pair<String, String>? = synchronized(CERROJO_DEL_TOKEN) {
+        val p = prefs ?: return@synchronized null
+        val acceso = p.getString("web_access", null) ?: return@synchronized null
+        val refresco = p.getString("web_refresh", null) ?: return@synchronized null
+        p.edit().remove("web_access").remove("web_refresh").apply()
+        acceso to refresco
     }
 
     /**

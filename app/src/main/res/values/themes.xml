@@ -1,4 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Seal" parent="android:Theme.Material.NoActionBar" />
+    <!--
+      El fondo de la ventana lo pinta Android antes de que Compose dibuje nada.
+      Con el valor por defecto de Theme.Material eso es un gris claro: al abrir
+      la app o al saltar la pantalla de bloqueo se veia un destello claro antes
+      del negro. Ponerlo aqui es lo unico que lo quita; desde Compose ya es
+      tarde.
+
+      El negro es el mismo de la web (--background de globals.css).
+    -->
+    <style name="Theme.Seal" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/fondo</item>
+        <item name="android:colorBackground">@color/fondo</item>
+        <item name="android:statusBarColor">@color/fondo</item>
+        <item name="android:navigationBarColor">@color/fondo</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
 </resources>

@@ -8,7 +8,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
 import com.cerrojo.datos.Almacen
 import com.cerrojo.servicio.ServicioDeVigilancia
@@ -32,7 +31,7 @@ class Principal : ComponentActivity() {
         // recomponga (rotacion, vuelta de onResume, etc.).
         val abrirAjustes = intent.getBooleanExtra(EXTRA_AJUSTES, false)
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
+            TemaDeSeal {
                 val almacen = remember { Almacen(this@Principal) }
                 var hecho by remember { mutableStateOf(almacen.asistenteHecho) }
                 val faltan = remember(visitas) {

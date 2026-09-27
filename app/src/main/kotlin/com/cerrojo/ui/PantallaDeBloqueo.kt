@@ -60,7 +60,7 @@ class PantallaDeBloqueo : ComponentActivity() {
         val nombre = nombreDeApp(paquete)
 
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
+            TemaDeSeal {
                 var restantes by remember { mutableIntStateOf(-1) }
 
                 // Irse no congela la espera: la cancela (restantes = -1, mas

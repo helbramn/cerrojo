@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Mismo valor que --background en src/app/globals.css de app-disciplina. -->
+    <color name="fondo">#060404</color>
+</resources>
