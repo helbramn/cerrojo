@@ -9,6 +9,10 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
+
+/** Los dias se cuentan aqui igual que en el servidor, no en la zona del movil. */
+private const val ZONA = "Europe/Madrid"
 
 /** Un dia de uso de una app concreta. */
 data class UsoDeApp(val paquete: String, val fecha: String, val minutos: Int)
@@ -97,11 +101,19 @@ class LectorDeUso(private val context: Context) {
      * servicios del sistema que no dicen nada sobre cómo gasta el tiempo.
      */
     fun usoPorAppYDia(dias: Int = 14, seQuedan: (String) -> Boolean): List<UsoDeApp> {
-        val formatoFecha = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        // Zona fija, no la del dispositivo: el servidor y la web cuentan los
+        // dias en Europe/Madrid, y si el movil viajara o tuviera mal la zona,
+        // las fechas subidas no cuadrarian con las que el coach lee.
+        val zona = TimeZone.getTimeZone(ZONA)
+        val formatoFecha = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = zona }
         val resultado = mutableListOf<UsoDeApp>()
-        val cal = Calendar.getInstance().apply {
+        val cal = Calendar.getInstance(zona).apply {
             set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+            // Empieza HOY, no ayer: el dato que el coach querria fresco es
+            // justamente el de hoy ("ya llevas 90 minutos"), y era el unico
+            // que no se subia.
+            add(Calendar.DAY_OF_YEAR, 1)
         }
         repeat(dias) {
             cal.add(Calendar.DAY_OF_YEAR, -1)

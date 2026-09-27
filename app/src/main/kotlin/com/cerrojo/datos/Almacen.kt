@@ -38,6 +38,10 @@ class Almacen(context: Context) {
         prefs.getString("limites:$paquete", null)
             ?.let { runCatching { json.decodeFromString<Limites>(it) }.getOrNull() }
 
+    /** Borrarlos obliga al servicio a recalcularlos en la siguiente vuelta. */
+    fun olvidarLimites(paquete: String) =
+        prefs.edit().remove("limites:$paquete").apply()
+
     fun guardarLimites(paquete: String, limites: Limites) =
         prefs.edit().putString("limites:$paquete", json.encodeToString(limites)).apply()
 
@@ -53,8 +57,19 @@ class Almacen(context: Context) {
      */
     fun cambiadoEn(paquete: String): Long = prefs.getLong("cambiado:$paquete", 0L)
 
+    /**
+     * Se guarda al segundo, sin milisegundos: el servidor devuelve la suya
+     * recortada a segundos, y si aqui quedaran los milisegundos la marca local
+     * seria siempre mayor y cada app tocada se reenviaria en cada sincronizacion
+     * para siempre.
+     */
     fun marcarCambio(paquete: String, cuandoMs: Long = System.currentTimeMillis()) =
-        prefs.edit().putLong("cambiado:$paquete", cuandoMs).apply()
+        prefs.edit().putLong("cambiado:$paquete", cuandoMs / 1000L * 1000L).apply()
+
+    /** Ultimo dia (yyyy-MM-dd) cuyo uso ya se subio. */
+    var ultimoDiaSubido: String
+        get() = prefs.getString("ultimoDiaSubido", "")!!
+        set(valor) = prefs.edit().putString("ultimoDiaSubido", valor).apply()
 
     /** Ultima sincronizacion con el servidor que salio bien. */
     var ultimaSyncOkMs: Long

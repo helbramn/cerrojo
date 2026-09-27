@@ -154,6 +154,16 @@ fun PantallaDeAjustes() {
                 style = MaterialTheme.typography.labelMedium,
             )
 
+            // La misma idea que el latido y el espejo: si esto se queda parado,
+            // el coach lleva dias razonando con numeros viejos y hasta ahora no
+            // habia forma de saberlo.
+            val sync = almacen.ultimaSyncOkMs
+            Text(
+                if (sync == 0L) "Uso aún sin sincronizar con el coach"
+                else "Uso sincronizado hace ${(ahora - sync) / 1000} s",
+                style = MaterialTheme.typography.labelMedium,
+            )
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                 context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
                 PackageManager.PERMISSION_GRANTED
@@ -171,7 +181,12 @@ fun PantallaDeAjustes() {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = activa, onCheckedChange = { marcada ->
-                            vigiladas = if (marcada) vigiladas + paquete else vigiladas - paquete
+                            // Se relee del almacen en vez de fiarse de lo que
+                            // tenia la pantalla: una sincronizacion pudo anadir
+                            // apps desde el chat mientras esto estaba abierto, y
+                            // escribir la lista vieja las borraria.
+                            val actuales = almacen.appsVigiladas()
+                            vigiladas = if (marcada) actuales + paquete else actuales - paquete
                             almacen.guardarAppsVigiladas(vigiladas)
                             // Se apunta cuando se tocó aquí: si también se
                             // editó desde el chat, gana el cambio más reciente.

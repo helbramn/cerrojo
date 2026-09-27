@@ -49,20 +49,33 @@ class SincronizadorDeUso(private val context: Context) {
 
     private fun subirUso(): Boolean {
         val pm = context.packageManager
-        val filas = lector.usoPorAppYDia(DIAS_A_SUBIR) { paquete ->
-            // Solo lo que el usuario puede abrir: sin este filtro entran
-            // cientos de servicios del sistema que no dicen nada de como gasta
-            // el tiempo, y el coach los leeria como si fueran apps suyas.
-            pm.getLaunchIntentForPackage(paquete) != null
+
+        // Solo lo que el usuario puede abrir: sin este filtro entran cientos de
+        // servicios del sistema que no dicen nada de como gasta el tiempo, y el
+        // coach los leeria como si fueran apps suyas.
+        //
+        // Se resuelve UNA vez y se cachea: consultar el PackageManager por cada
+        // fila son miles de llamadas al sistema por sincronizacion.
+        val abribles = mutableMapOf<String, Boolean>()
+        val nombres = mutableMapOf<String, String>()
+
+        // Los dias viejos ya no cambian: volver a subir catorce cada cuarto de
+        // hora son megabytes al dia para no decir nada nuevo. Se suben los que
+        // faltan desde la ultima vez, y hoy siempre (hoy si cambia).
+        val dias = diasQueFaltan()
+        val filas = lector.usoPorAppYDia(dias) { paquete ->
+            abribles.getOrPut(paquete) { pm.getLaunchIntentForPackage(paquete) != null }
         }
-        if (filas.isEmpty()) return true
+        if (filas.isEmpty()) return false // sin permiso de uso no hay nada: no es un exito
 
         val cuerpo = JSONArray()
         for (fila in filas) {
-            val nombre = try {
-                pm.getApplicationLabel(pm.getApplicationInfo(fila.paquete, 0)).toString()
-            } catch (_: Exception) {
-                fila.paquete
+            val nombre = nombres.getOrPut(fila.paquete) {
+                try {
+                    pm.getApplicationLabel(pm.getApplicationInfo(fila.paquete, 0)).toString()
+                } catch (_: Exception) {
+                    fila.paquete
+                }
             }
             cuerpo.put(
                 JSONObject()
@@ -72,7 +85,24 @@ class SincronizadorDeUso(private val context: Context) {
                     .put("minutos", fila.minutos)
             )
         }
-        return sesion.enviar("/rest/v1/uso_apps", cuerpo.toString())
+        val ok = sesion.enviar("/rest/v1/uso_apps", cuerpo.toString())
+        if (ok) almacen.ultimoDiaSubido = filas.maxOf { it.fecha }
+        return ok
+    }
+
+    /**
+     * Cuantos dias hay que mandar. La primera vez, los catorce que usa el
+     * cerrojo para calcular limites. Despues, solo lo que ha cambiado desde la
+     * ultima subida, con un minimo de dos por si el movil estuvo apagado a
+     * caballo de la medianoche.
+     */
+    private fun diasQueFaltan(): Int {
+        val ultimo = almacen.ultimoDiaSubido
+        if (ultimo.isEmpty()) return DIAS_A_SUBIR
+        val desde = instanteDeFecha(ultimo)
+        if (desde == 0L) return DIAS_A_SUBIR
+        val pasados = ((System.currentTimeMillis() - desde) / 86_400_000L).toInt()
+        return (pasados + 1).coerceIn(2, DIAS_A_SUBIR)
     }
 
     // ---------------------------------------------------------------- bajar
@@ -92,7 +122,7 @@ class SincronizadorDeUso(private val context: Context) {
 
         val delServidor = JSONArray(json)
         val vistos = mutableSetOf<String>()
-        var vigiladas = almacen.appsVigiladas().toMutableList()
+        val vigiladas = almacen.appsVigiladas().toMutableList()
         val pendientesDeSubir = JSONArray()
 
         for (i in 0 until delServidor.length()) {
@@ -117,7 +147,13 @@ class SincronizadorDeUso(private val context: Context) {
             if (vigilada && paquete !in vigiladas) vigiladas += paquete
             if (!vigilada) vigiladas.remove(paquete)
             val suelo = fila.optInt("suelo_min", 0)
-            if (suelo > 0) almacen.guardarSuelo(paquete, suelo)
+            if (suelo > 0 && suelo != almacen.suelo(paquete)) {
+                almacen.guardarSuelo(paquete, suelo)
+                // Sin esto, el suelo que pusiste por chat no se notaria hasta
+                // el lunes: los limites solo se recalculan al cambiar de semana
+                // o cuando falta alguno. Borrarlo fuerza el recalculo.
+                almacen.olvidarLimites(paquete)
+            }
         }
 
         // Apps que se vigilan aquí y el servidor no conoce todavía.
@@ -154,8 +190,20 @@ class SincronizadorDeUso(private val context: Context) {
     private fun formato(patron: String) =
         SimpleDateFormat(patron, Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
 
+    /**
+     * Para una app que nunca se ha tocado en este movil se manda la epoca cero,
+     * no "ahora": poner la hora actual seria fingir una opinion reciente sobre
+     * algo que el usuario no ha decidido aqui, y le haria ganar un conflicto
+     * que deberia perder.
+     */
     private fun enISO(ms: Long): String =
-        formato("yyyy-MM-dd'T'HH:mm:ss'Z'").format(Date(if (ms == 0L) System.currentTimeMillis() else ms))
+        formato("yyyy-MM-dd'T'HH:mm:ss'Z'").format(Date(ms))
+
+    private fun instanteDeFecha(fecha: String): Long = try {
+        formato("yyyy-MM-dd").parse(fecha)?.time ?: 0L
+    } catch (_: Exception) {
+        0L
+    }
 
     /**
      * Postgres devuelve la marca de tiempo con fracciones y desplazamiento
@@ -164,9 +212,18 @@ class SincronizadorDeUso(private val context: Context) {
      * analizador completo de ISO 8601.
      */
     private fun instanteDe(texto: String): Long = try {
-        if (texto.isEmpty()) 0L
-        else formato("yyyy-MM-dd'T'HH:mm:ss").parse(texto.take(19))?.time ?: 0L
+        when {
+            texto.isEmpty() -> 0L
+            // Recortar a 19 solo vale si lo que sigue es la fraccion o el
+            // desplazamiento. Si algun dia llegara en otra zona, cortar a ciegas
+            // haria parecer el instante horas adelantado y el servidor ganaria
+            // todos los conflictos en silencio. Ante la duda, gana el servidor
+            // pero de forma explicita, no por un error de lectura.
+            texto.length > 19 && texto[19] !in ".+-Z" -> Long.MAX_VALUE
+            else -> formato("yyyy-MM-dd'T'HH:mm:ss").parse(texto.take(19))?.time ?: Long.MAX_VALUE
+        }
     } catch (_: Exception) {
-        0L
+        // Sin poder leerlo, manda el servidor: es la fuente compartida.
+        Long.MAX_VALUE
     }
 }
