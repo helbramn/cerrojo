@@ -6,6 +6,12 @@ quien venga después —persona o máquina— no vuelva a tropezar en lo mismo.
 
 Ordenado por lo que enseña, no por fecha.
 
+La versión cronológica —qué se hizo cada día en los dos repositorios, con el
+hash de cada commit— está en `docs/bitacora.md` del repositorio de la web
+(privado). Este documento es la otra mitad: los mismos fallos, agrupados por lo
+que hay que aprender de ellos. Es el que conviene leer antes de escribir código
+nuevo aquí.
+
 ---
 
 ## El fallo que más veces ha aparecido
