@@ -161,8 +161,13 @@ límites, apps vigiladas y la fecha de instalación que cuenta las semanas.
 **Arreglo**: clave fija en los secretos del repositorio, desde la v0.6.
 
 ### Dos guiones seguidos en un comentario XML
-Rompe el compilador de recursos de Android. Pasó al escribir los nombres de unas
-variables CSS dentro de un comentario.
+Rompe el compilador de recursos de Android. Pasó **tres veces**, siempre igual:
+citando el nombre de una variable CSS (`--background`, `--gold`, `--radius`)
+dentro de un comentario. La tercera fue justo después de escribir este
+documento.
+
+**Regla**: el nombre de una variable CSS no se escribe nunca dentro de un
+comentario de XML de Android. Se nombra sin los guiones.
 
 ### `continue` dentro de una lambda
 Kotlin lo trata como función experimental. Pasó **dos veces** en este repo.

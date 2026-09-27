@@ -7,7 +7,9 @@
       del negro. Ponerlo aqui es lo unico que lo quita; desde Compose ya es
       tarde.
 
-      El negro es el mismo de la web (--background de globals.css).
+      El negro es el mismo de la web: la variable background de globals.css.
+      (Sin los dos guiones delante: dos guiones seguidos dentro de un
+      comentario XML rompen el compilador de recursos de Android.)
     -->
     <style name="Theme.Seal" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/fondo</item>

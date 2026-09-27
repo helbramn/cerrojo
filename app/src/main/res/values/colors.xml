@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Mismo valor que --background en src/app/globals.css de app-disciplina. -->
+    <!-- Mismo valor que la variable background de src/app/globals.css.
+         Escrita sin los dos guiones a proposito: dos guiones seguidos dentro
+         de un comentario XML rompen el compilador de recursos. -->
     <color name="fondo">#060404</color>
 </resources>
