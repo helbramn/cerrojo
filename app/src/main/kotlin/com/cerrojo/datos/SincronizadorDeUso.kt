@@ -97,7 +97,10 @@ class SincronizadorDeUso(private val context: Context) {
 
         for (i in 0 until delServidor.length()) {
             val fila = delServidor.getJSONObject(i)
-            val paquete = fila.optString("paquete").ifEmpty { continue }
+            // Kotlin no deja un continue dentro de una lambda inline sin
+            // activar una opcion experimental; va como if suelto.
+            val paquete = fila.optString("paquete")
+            if (paquete.isEmpty()) continue
             vistos += paquete
 
             val enServidorMs = instanteDe(fila.optString("actualizado_en"))
