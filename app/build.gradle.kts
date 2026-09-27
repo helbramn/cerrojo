@@ -11,9 +11,37 @@ android {
         applicationId = "com.cerrojo"
         minSdk = 29
         targetSdk = 34
-        versionCode = 5
-        versionName = "0.5"
+        versionCode = 6
+        versionName = "0.6"
     }
+    // Firma fija. Sin esto, Gradle firma con una clave de depuracion nueva en
+    // cada maquina y cada compilacion, y entonces una version no se instala
+    // encima de la anterior: Android lo ve como otra app suplantando a la tuya.
+    // La clave viaja como secreto de GitHub, nunca en el repositorio.
+    signingConfigs {
+        create("sello") {
+            val fichero = System.getenv("RUTA_DEL_SELLO")
+            if (fichero != null) {
+                storeFile = file(fichero)
+                storePassword = System.getenv("CLAVE_DEL_SELLO")
+                keyAlias = "seal"
+                keyPassword = System.getenv("CLAVE_DEL_SELLO")
+                storeType = "PKCS12"
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            // Solo si el secreto esta presente: asi una compilacion local o un
+            // fork sin la clave siguen funcionando en vez de romperse.
+            if (System.getenv("RUTA_DEL_SELLO") != null) {
+                signingConfig = signingConfigs.getByName("sello")
+            }
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

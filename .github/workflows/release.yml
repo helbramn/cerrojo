@@ -15,10 +15,19 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew :core:test :app:assembleDebug
+      - name: Preparar el sello de firma
+        env:
+          SELLO: ${{ secrets.KEYSTORE_BASE64 }}
+        run: echo "$SELLO" | base64 -d > "$RUNNER_TEMP/seal.p12"
+
+      - name: Compilar firmado
+        env:
+          RUTA_DEL_SELLO: ${{ runner.temp }}/seal.p12
+          CLAVE_DEL_SELLO: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: ./gradlew :core:test :app:assembleRelease
       - name: Publicar
         run: |
-          mv app/build/outputs/apk/debug/app-debug.apk cerrojo-${{ github.ref_name }}.apk
+          mv app/build/outputs/apk/release/app-release.apk cerrojo-${{ github.ref_name }}.apk
           gh release create "${{ github.ref_name }}" "cerrojo-${{ github.ref_name }}.apk" \
             --title "Cerrojo ${{ github.ref_name }}" \
             --notes "Descarga el APK desde el móvil e instálalo encima de la versión anterior."

@@ -3,3 +3,9 @@ build/
 local.properties
 *.apk
 .idea/
+
+# Nunca: la clave de firma vive fuera del repo (repo publico)
+*.p12
+*.jks
+*.keystore
+password.txt
