@@ -7,6 +7,10 @@ import com.cerrojo.core.SUELO_POR_DEFECTO_MIN
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
+// El nombre del fichero de preferencias NO se renombra con la app. Es la
+// clave con la que Android guarda lo que hay dentro: cambiarlo abre un fichero
+// vacio y el movil pierde los limites, las apps vigiladas y la fecha de
+// instalacion que cuenta las semanas. Que se llame "cerrojo" no lo ve nadie.
 private const val FICHERO = "cerrojo"
 private const val URL_WEB_POR_DEFECTO = "https://app-disciplina-theta.vercel.app"
 

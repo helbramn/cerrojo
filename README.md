@@ -1,4 +1,4 @@
-# Cerrojo
+# Seal
 
 Bloqueo de apps por tiempo de uso para Android, con límites que se calculan
 a partir del uso real y bajan un 10 % cada semana. Incluye dentro la app de
@@ -19,7 +19,20 @@ siguientes se instalan encima sin perder nada.
 desinstalar primero. Las versiones hasta la v0.5 se firmaban con una clave
 distinta en cada compilación y Android rechaza la actualización. Desinstalar
 borra los límites, las apps vigiladas y la fecha de instalación que cuenta las
-semanas: el cerrojo vuelve a medir catorce días desde cero.
+semanas: Seal vuelve a medir catorce días desde cero.
+
+## El nombre
+
+La app se llama **Seal**. Dos cosas siguen llamándose `cerrojo` a propósito, y
+no son un descuido:
+
+- El identificador de la app (`com.cerrojo`) y el nombre del fichero donde
+  guarda sus datos. Android identifica una app por ahí: cambiarlos la
+  convertiría en otra app distinta, habría que desinstalar y se perderían los
+  límites, las apps vigiladas y la fecha de instalación que cuenta las semanas.
+  Nada de eso se ve desde el móvil.
+- La palabra «cerrojo» en minúscula dentro de los textos, donde es el nombre
+  común del mecanismo, no el de la app.
 
 ## Desarrollo
 

@@ -135,7 +135,7 @@ class EspejoDeAvisos(private val context: Context) {
         crearCanal()
         context.getSystemService(NotificationManager::class.java)
             .notify(AVISO_SESION, NotificationCompat.Builder(context, CANAL)
-                .setContentTitle("Cerrojo")
+                .setContentTitle("Seal")
                 .setContentText("Se perdió la conexión con tu cuenta: entra en Ajustes para reconectarla.")
                 .setSmallIcon(R.drawable.ic_aviso)
                 .setAutoCancel(true)

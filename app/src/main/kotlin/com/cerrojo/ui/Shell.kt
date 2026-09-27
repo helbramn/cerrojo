@@ -122,12 +122,12 @@ class Shell : ComponentActivity() {
                         }
                     }
 
-                    // Ajustes de Cerrojo (apps vigiladas, cuenta, permisos de
+                    // Ajustes de Seal (apps vigiladas, cuenta, permisos de
                     // MIUI) — no de la web. Desde que el icono del lanzador
                     // lleva directo aqui, sin este boton esa pantalla se
                     // quedaria sin ninguna entrada obvia. Fijo y pequeño, por
                     // encima incluso del aviso de "sin conexión": los ajustes
-                    // de Cerrojo no dependen de la red.
+                    // de Seal no dependen de la red.
                     Box(
                         Modifier
                             .align(Alignment.TopEnd)

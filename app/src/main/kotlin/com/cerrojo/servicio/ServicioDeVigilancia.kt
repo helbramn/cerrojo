@@ -99,7 +99,7 @@ class ServicioDeVigilancia : Service() {
      * la app, casi siempre contra un servicio que ya esta corriendo: si solo
      * se llamase desde `onCreate`, esas llamadas de `onStartCommand` no
      * cumplirian nunca ese plazo y el sistema mataria el proceso con
-     * `RemoteServiceException` unos diez segundos despues de abrir Cerrojo.
+     * `RemoteServiceException` unos diez segundos despues de abrir Seal.
      */
     private fun asegurarPrimerPlano() {
         ServiceCompat.startForeground(
@@ -222,7 +222,7 @@ class ServicioDeVigilancia : Service() {
      * realmente denegado siempre da `false` y enciende el aviso.
      */
     private fun textoDeLatido(ahora: Long): String = when {
-        lector.tienePermisoDeUso() == false -> "sin permiso de uso — abre Cerrojo"
+        lector.tienePermisoDeUso() == false -> "sin permiso de uso — abre Seal"
         // El contador es la unica señal posible de que "ventanas emergentes en
         // segundo plano" se revoco: no hay API para consultarlo directamente.
         reintentosFallidosSeguidos >= REINTENTOS_FALLIDOS_PARA_AVISAR ->
@@ -291,11 +291,11 @@ class ServicioDeVigilancia : Service() {
 
     private fun notificacion(texto: String): Notification =
         NotificationCompat.Builder(this, CANAL)
-            .setContentTitle("Cerrojo")
+            .setContentTitle("Seal")
             .setContentText(texto)
             .setSmallIcon(R.drawable.ic_aviso)
             .setOngoing(true)
-            // Sin esto "sin permiso de uso — abre Cerrojo" mandaba a abrir una
+            // Sin esto "sin permiso de uso — abre Seal" mandaba a abrir una
             // app que tocarla no hacia nada: el propio aviso decia que hacer y
             // luego no dejaba hacerlo.
             .setContentIntent(

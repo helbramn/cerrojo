@@ -27,9 +27,9 @@ jobs:
         run: ./gradlew :core:test :app:assembleRelease
       - name: Publicar
         run: |
-          mv app/build/outputs/apk/release/app-release.apk cerrojo-${{ github.ref_name }}.apk
-          gh release create "${{ github.ref_name }}" "cerrojo-${{ github.ref_name }}.apk" \
-            --title "Cerrojo ${{ github.ref_name }}" \
+          mv app/build/outputs/apk/release/app-release.apk seal-${{ github.ref_name }}.apk
+          gh release create "${{ github.ref_name }}" "seal-${{ github.ref_name }}.apk" \
+            --title "Seal ${{ github.ref_name }}" \
             --notes "Descarga el APK desde el móvil e instálalo encima de la versión anterior."
         env:
           GH_TOKEN: ${{ github.token }}

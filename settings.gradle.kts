@@ -4,5 +4,5 @@ pluginManagement {
 dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
-rootProject.name = "cerrojo"
+rootProject.name = "seal"
 include(":core", ":app")
