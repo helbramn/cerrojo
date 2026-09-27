@@ -173,6 +173,9 @@ fun PantallaDeAjustes() {
                         Checkbox(checked = activa, onCheckedChange = { marcada ->
                             vigiladas = if (marcada) vigiladas + paquete else vigiladas - paquete
                             almacen.guardarAppsVigiladas(vigiladas)
+                            // Se apunta cuando se tocó aquí: si también se
+                            // editó desde el chat, gana el cambio más reciente.
+                            almacen.marcarCambio(paquete)
                             if (marcada) {
                                 // Catorce consultas al sistema: fuera del hilo
                                 // principal, o la interaccion mas importante de

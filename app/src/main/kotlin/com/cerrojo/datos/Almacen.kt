@@ -46,6 +46,21 @@ class Almacen(context: Context) {
     fun guardarSuelo(paquete: String, minutos: Int) =
         prefs.edit().putInt("suelo:$paquete", minutos).apply()
 
+    /**
+     * Cuando se toco por ultima vez la vigilancia de esta app EN ESTE MOVIL.
+     * El usuario puede editar desde el chat y desde aqui, asi que hace falta
+     * saber cual de los dos cambios es mas reciente: gana el ultimo.
+     */
+    fun cambiadoEn(paquete: String): Long = prefs.getLong("cambiado:$paquete", 0L)
+
+    fun marcarCambio(paquete: String, cuandoMs: Long = System.currentTimeMillis()) =
+        prefs.edit().putLong("cambiado:$paquete", cuandoMs).apply()
+
+    /** Ultima sincronizacion con el servidor que salio bien. */
+    var ultimaSyncOkMs: Long
+        get() = prefs.getLong("syncOk", 0L)
+        set(valor) = prefs.edit().putLong("syncOk", valor).apply()
+
     var instaladoEl: Long
         get() = prefs.getLong("instaladoEl", 0L).let {
             if (it != 0L) it else System.currentTimeMillis().also { ahora ->

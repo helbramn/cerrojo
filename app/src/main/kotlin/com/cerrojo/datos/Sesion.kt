@@ -150,6 +150,36 @@ class Sesion(context: Context) {
     }
 
     /**
+     * Escribe en el servidor. [fusionar] activa el upsert de PostgREST: repetir
+     * un dia ya subido lo actualiza en vez de reventar por clave duplicada.
+     *
+     * Como [obtener], no toca ultimoFalloDeSesion: esto son datos, no sesion.
+     */
+    fun enviar(ruta: String, cuerpo: String, fusionar: Boolean = true): Boolean = try {
+        val t = token()
+        if (t == null) false
+        else {
+            val c = (URL(SUPABASE_URL + ruta).openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = ESPERA_CONEXION_MS
+                readTimeout = ESPERA_LECTURA_MS
+                setRequestProperty("apikey", CLAVE_PUBLICABLE)
+                setRequestProperty("Authorization", "Bearer $t")
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty(
+                    "Prefer",
+                    if (fusionar) "resolution=merge-duplicates,return=minimal" else "return=minimal"
+                )
+                doOutput = true
+                outputStream.use { it.write(cuerpo.toByteArray()) }
+            }
+            c.responseCode in 200..299
+        }
+    } catch (_: Exception) {
+        false
+    }
+
+    /**
      * Un 500 o un limite de peticiones no son una sesion muerta: son problemas
      * del servidor, y pasaran. Solo un rechazo explicito de las credenciales
      * cuenta como sesion perdida.

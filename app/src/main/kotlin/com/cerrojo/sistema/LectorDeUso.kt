@@ -5,7 +5,13 @@ import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.os.Process
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+
+/** Un dia de uso de una app concreta. */
+data class UsoDeApp(val paquete: String, val fecha: String, val minutos: Int)
 
 private const val PRIMERA_MIRADA_ATRAS_MS = 12 * 60 * 60 * 1000L
 
@@ -77,6 +83,45 @@ class LectorDeUso(private val context: Context) {
         }
         ultimaConsultaMs = ahora
         return enPrimerPlano
+    }
+
+    /**
+     * Uso de TODAS las apps del usuario, día a día. Es lo que se sube al
+     * servidor para que el coach pueda analizarlo.
+     *
+     * Una consulta por día en vez de una por app y día: [minutosPorDia] sirve
+     * para una sola app, pero para subirlo todo serían decenas de consultas
+     * por día. Aquí se pide el día entero y se reparte por paquete.
+     *
+     * Solo apps que el usuario puede abrir: sin ese filtro entran cientos de
+     * servicios del sistema que no dicen nada sobre cómo gasta el tiempo.
+     */
+    fun usoPorAppYDia(dias: Int = 14, seQuedan: (String) -> Boolean): List<UsoDeApp> {
+        val formatoFecha = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val resultado = mutableListOf<UsoDeApp>()
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }
+        repeat(dias) {
+            cal.add(Calendar.DAY_OF_YEAR, -1)
+            val inicio = cal.timeInMillis
+            val fin = (cal.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, 1) }.timeInMillis
+            val fecha = formatoFecha.format(Date(inicio))
+
+            // Android puede devolver varias filas del mismo paquete en un dia;
+            // hay que sumarlas, no quedarse con la primera.
+            val porPaquete = mutableMapOf<String, Long>()
+            for (s in usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, inicio, fin).orEmpty()) {
+                if (!seQuedan(s.packageName)) continue
+                porPaquete[s.packageName] = (porPaquete[s.packageName] ?: 0L) + s.totalTimeInForeground
+            }
+            for ((paquete, ms) in porPaquete) {
+                val minutos = (ms / 60_000L).toInt()
+                if (minutos > 0) resultado += UsoDeApp(paquete, fecha, minutos)
+            }
+        }
+        return resultado
     }
 
     /**

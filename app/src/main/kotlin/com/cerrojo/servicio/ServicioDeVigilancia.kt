@@ -65,8 +65,13 @@ class ServicioDeVigilancia : Service() {
     private var bloqueoMostradoPara: String? = null
     private var ticsDesdeElBloqueo = 0
     private var reintentosFallidosSeguidos = 0
+    private val sincronizador by lazy { com.cerrojo.datos.SincronizadorDeUso(this) }
     private val espejo by lazy { com.cerrojo.datos.EspejoDeAvisos(this) }
     private var ultimoEspejo = 0L
+    private var ultimaSync = 0L
+
+    @Volatile
+    private var sincronizando = false
 
     @Volatile
     private var mirandoAvisos = false
@@ -157,6 +162,22 @@ class ServicioDeVigilancia : Service() {
                 // camino de bloqueo sigue funcionando.
                 reintentosFallidosSeguidos = 0
             }
+        }
+
+        // Subir el uso y bajar las apps que el usuario eligio desde el chat.
+        // Cada cuarto de hora basta: son datos para que el coach hable con
+        // fundamento, no para bloquear — eso va con la copia local.
+        if (ahora - ultimaSync > 15 * 60_000L && !sincronizando) {
+            ultimaSync = ahora
+            sincronizando = true
+            Thread {
+                try {
+                    sincronizador.sincronizar()
+                } catch (_: Throwable) {
+                } finally {
+                    sincronizando = false
+                }
+            }.start()
         }
 
         // La misma guarda que el recalculo semanal: sin ella, una red que no
