@@ -53,11 +53,15 @@ class Principal : ComponentActivity() {
                         almacen.asistenteHecho = true
                         hecho = true
                     })
-                } else if (!hayCuenta && !entrarDespues && !abrirAjustes) {
+                } else if (!hayCuenta && !entrarDespues) {
                     // ANTES del WebView, no despues. El puente hacia la web se
                     // crea al entrar aqui; si se entra primero en la web, el
                     // lado nativo no se entera y acabas escribiendo la
                     // contraseña dos veces, que es justo lo que pasaba.
+                    //
+                    // Manda tambien sobre EXTRA_AJUSTES: la notificacion de
+                    // "sesion perdida" trae ese extra, y si Ajustes ganara,
+                    // aterrizaria en una pantalla sin forma de reconectar.
                     PantallaDeEntrada(
                         alEntrar = { hayCuenta = true },
                         alSaltar = { entrarDespues = true },

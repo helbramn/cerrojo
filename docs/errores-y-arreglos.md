@@ -205,5 +205,11 @@ salía una barra.
 - **El fallback de `MODE_DEFAULT`** a `checkCallingOrSelfPermission` es
   probablemente código muerto en una ROM estándar. Es inofensivo, pero si el
   latido dijera "sin permiso" con el cerrojo funcionando, mirar ahí.
+- **Para publicar hace falta que la gente pueda crearse una cuenta.** Hoy no
+  existe registro: la única cuenta se creó a mano con la Admin API de Supabase
+  porque esto es de un solo usuario. Antes de que lo use alguien más hay que
+  añadir alta de cuenta, y decidir qué pasa con lo que hoy es global (los
+  `settings`, las claves VAPID, el cron del reenganche) cuando haya más de una
+  persona.
 - **Nada del móvil se ha probado en un teléfono real.** Todo lo de este
   repositorio está razonado y revisado, no ejecutado.

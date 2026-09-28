@@ -5,6 +5,9 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,19 +16,87 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.cerrojo.core.SUELO_POR_DEFECTO_MIN
 import com.cerrojo.core.limitesDe
 import com.cerrojo.core.mediaDeUso
 import com.cerrojo.datos.Almacen
-import com.cerrojo.datos.Sesion
 import com.cerrojo.sistema.LectorDeUso
 
-private data class AppInstalada(val paquete: String, val nombre: String, val deUsuario: Boolean)
+private data class AppInstalada(
+    val paquete: String,
+    val nombre: String,
+    val deUsuario: Boolean,
+    /** Minutos al dia que se usa de verdad, mediana de los ultimos 14 dias. */
+    val minutosDia: Int,
+)
+
+/** "2 h 30 min" se entiende; "150 min" hay que traducirlo mentalmente. */
+private fun enHoras(minutos: Int): String = when {
+    minutos < 60 -> "$minutos min"
+    minutos % 60 == 0 -> "${minutos / 60} h"
+    else -> "${minutos / 60} h ${minutos % 60} min"
+}
+
+private fun mediana(valores: List<Int>): Int {
+    if (valores.isEmpty()) return 0
+    val o = valores.sorted()
+    return if (o.size % 2 == 1) o[o.size / 2] else (o[o.size / 2 - 1] + o[o.size / 2]) / 2
+}
+
+@Composable
+private fun Rotulo(texto: String) {
+    Text(
+        texto.uppercase(),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
+    )
+}
+
+/**
+ * Bloque que se abre y se cierra. Lo que hay dentro no es urgente, pero tiene
+ * que poder verse: esconderlo del todo es como no tenerlo.
+ */
+@Composable
+private fun Desplegable(
+    titulo: String,
+    abiertoAlPrincipio: Boolean = false,
+    contenido: @Composable ColumnScope.() -> Unit,
+) {
+    var abierto by remember { mutableStateOf(abiertoAlPrincipio) }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium)
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable { abierto = !abierto }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(titulo, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Text(
+                if (abierto) "−" else "+",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        AnimatedVisibility(abierto) {
+            Column(
+                Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                content = contenido,
+            )
+        }
+    }
+}
 
 @Composable
 fun PantallaDeAjustes() {
@@ -35,192 +106,343 @@ fun PantallaDeAjustes() {
     val alcance = rememberCoroutineScope()
     var vigiladas by remember { mutableStateOf(almacen.appsVigiladas()) }
     var refresco by remember { mutableIntStateOf(0) }
+    var verTodas by remember { mutableStateOf(false) }
 
-    // Listar las apps instaladas resuelve un intent y un nombre por cada una;
-    // en el hilo principal eso congela el primer fotograma de la pantalla.
-    var instaladas by remember { mutableStateOf(emptyList<AppInstalada>()) }
+    // Listar las apps instaladas resuelve un intent y un nombre por cada una, y
+    // ademas hay que leer cuanto se usa cada una: en el hilo principal eso
+    // congela el primer fotograma de la pantalla.
+    var instaladas by remember { mutableStateOf<List<AppInstalada>?>(null) }
     LaunchedEffect(Unit) {
         instaladas = withContext(Dispatchers.IO) {
             val pm = context.packageManager
-            pm.getInstalledApplications(0)
+            val abribles = pm.getInstalledApplications(0)
                 .filter { pm.getLaunchIntentForPackage(it.packageName) != null }
-                .map {
-                    AppInstalada(
-                        it.packageName,
-                        pm.getApplicationLabel(it).toString(),
-                        (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0,
-                    )
-                }
-                .sortedBy { it.nombre.lowercase() }
-        }
-    }
 
-    LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item {
-            Button(
-                onClick = { context.startActivity(Intent(context, Shell::class.java)) },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("Abrir Disciplina") }
-        }
-        item {
-            val sesion = remember { Sesion(context) }
-            var conectado by remember { mutableStateOf(true) }
-            // Se mira si hay cuenta guardada, no si el token responde ahora
-            // mismo: preguntarselo a la red haria aparecer el formulario de
-            // entrada cada vez que el usuario esta sin cobertura, pidiendole
-            // una contraseña que nadie ha invalidado.
-            LaunchedEffect(Unit) { conectado = sesion.hayCuenta() }
-
-            if (!conectado) {
-                var correo by remember { mutableStateOf("") }
-                var clave by remember { mutableStateOf("") }
-                var entrando by remember { mutableStateOf(false) }
-                var error by remember { mutableStateOf(false) }
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        "Conecta tu cuenta para recibir los avisos",
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    OutlinedTextField(
-                        value = correo, onValueChange = { correo = it },
-                        label = { Text("Correo") }, singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = clave, onValueChange = { clave = it },
-                        label = { Text("Contraseña") }, singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Button(
-                        enabled = !entrando,
-                        onClick = {
-                            error = false
-                            entrando = true
-                            // En una coroutine, no en un Thread pelado: el
-                            // Thread anterior asignaba `conectado` (estado de
-                            // Compose) desde fuera del hilo principal, que no
-                            // esta soportado. withContext(IO) hace el trabajo
-                            // de red fuera y devuelve la asignacion al hilo
-                            // principal al volver.
-                            alcance.launch {
-                                val ok = withContext(Dispatchers.IO) { sesion.entrar(correo, clave) }
-                                entrando = false
-                                if (ok) conectado = true else error = true
-                            }
-                        },
-                    ) { Text(if (entrando) "Entrando…" else "Entrar") }
-                    if (error) {
-                        // Antes, una contraseña equivocada dejaba `conectado`
-                        // en `false` (ya lo estaba): la pantalla no cambiaba
-                        // nada y no habia forma de distinguir un fallo de
-                        // credenciales de un boton roto o una red lenta.
-                        Text(
-                            "No se pudo entrar: revisa el correo y la contraseña.",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                }
+            // Una sola consulta para todas, no una por app: preguntar el uso app
+            // por app son cientos de llamadas al sistema y la pantalla tarda
+            // segundos en aparecer.
+            val porPaquete = mutableMapOf<String, MutableList<Int>>()
+            val queridos = abribles.map { it.packageName }.toSet()
+            for (fila in lector.usoPorAppYDia(14) { it in queridos }) {
+                porPaquete.getOrPut(fila.paquete) { mutableListOf() }.add(fila.minutos)
             }
-        }
-        item {
-            Text("Apps vigiladas", style = MaterialTheme.typography.headlineSmall)
 
-            // El latido tiene que moverse solo. Un numero congelado se lee como
-            // "todo bien" justo cuando el servicio acaba de morir, que es el
-            // unico momento en que esta linea importa.
-            var ahora by remember { mutableLongStateOf(System.currentTimeMillis()) }
-            LaunchedEffect(Unit) {
-                while (true) {
-                    delay(1000)
-                    ahora = System.currentTimeMillis()
-                }
-            }
-            val latido = almacen.ultimaComprobacionMs
-            Text(
-                if (latido == 0L) "El servicio aún no ha dado señales"
-                else "Última comprobación hace ${(ahora - latido) / 1000} s",
-                style = MaterialTheme.typography.labelMedium,
-            )
-            // Sin esta linea, un espejo de avisos atascado (esquema cambiado,
-            // PostgREST fallando, o incluso una consulta colgada que deja su
-            // guarda interna sin liberarse nunca) fallaba en total silencio:
-            // el reenganche dejaba de avisar y nada en la pantalla lo decia.
-            val espejoOk = almacen.ultimoEspejoOkMs
-            Text(
-                if (espejoOk == 0L) "El espejo de avisos aún no ha leído nada con éxito"
-                else "Último espejo de avisos con éxito hace ${(ahora - espejoOk) / 1000} s",
-                style = MaterialTheme.typography.labelMedium,
-            )
-
-            // La misma idea que el latido y el espejo: si esto se queda parado,
-            // el coach lleva dias razonando con numeros viejos y hasta ahora no
-            // habia forma de saberlo.
-            val sync = almacen.ultimaSyncOkMs
-            Text(
-                if (sync == 0L) "Uso aún sin sincronizar con el coach"
-                else "Uso sincronizado hace ${(ahora - sync) / 1000} s",
-                style = MaterialTheme.typography.labelMedium,
-            )
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
-                PackageManager.PERMISSION_GRANTED
-            ) {
-                Text(
-                    "Has denegado las notificaciones: el cerrojo sigue funcionando, pero no verás el aviso de que está vivo.",
-                    style = MaterialTheme.typography.labelMedium,
+            abribles.map {
+                AppInstalada(
+                    it.packageName,
+                    pm.getApplicationLabel(it).toString(),
+                    (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0,
+                    mediana(porPaquete[it.packageName].orEmpty()),
                 )
             }
         }
-        items(instaladas.filter { it.deUsuario || vigiladas.contains(it.paquete) }) { app ->
-            val paquete = app.paquete
-            val activa = vigiladas.contains(paquete)
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = activa, onCheckedChange = { marcada ->
-                            // Se relee del almacen en vez de fiarse de lo que
-                            // tenia la pantalla: una sincronizacion pudo anadir
-                            // apps desde el chat mientras esto estaba abierto, y
-                            // escribir la lista vieja las borraria.
-                            val actuales = almacen.appsVigiladas()
-                            vigiladas = if (marcada) actuales + paquete else actuales - paquete
-                            almacen.guardarAppsVigiladas(vigiladas)
-                            // Se apunta cuando se tocó aquí: si también se
-                            // editó desde el chat, gana el cambio más reciente.
-                            almacen.marcarCambio(paquete)
-                            if (marcada) {
-                                // Catorce consultas al sistema: fuera del hilo
-                                // principal, o la interaccion mas importante de
-                                // la app se queda pillada medio segundo.
-                                alcance.launch(Dispatchers.IO) {
-                                    val media = mediaDeUso(lector.minutosPorDia(paquete))
-                                    almacen.guardarLimites(
-                                        paquete,
-                                        limitesDe(
-                                            media,
-                                            almacen.semanaDeLosLimites.coerceAtLeast(1),
-                                            almacen.suelo(paquete),
-                                        ),
-                                    )
-                                    refresco++
-                                }
-                            }
-                        })
-                        Text(app.nombre)
-                    }
-                    if (activa) {
-                        val l = remember(refresco, paquete) { almacen.limites(paquete) }
-                        Text(
-                            if (l == null) "Calculando límites…"
-                            else "Objetivo ${l.objetivoMin} min/día · sesión ${l.sesionMin} min · espera ${l.enfriamientoMin} min",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
+    }
+
+    val lista = instaladas
+    // Lo que mas usas, arriba. Alfabetico obliga a buscar; por uso, las
+    // candidatas de verdad son las tres primeras.
+    val ordenadas = remember(lista, vigiladas, verTodas) {
+        lista.orEmpty()
+            .filter { it.deUsuario || it.paquete in vigiladas }
+            .sortedWith(compareByDescending<AppInstalada> { it.paquete in vigiladas }
+                .thenByDescending { it.minutosDia }
+                .thenBy { it.nombre.lowercase() })
+            .let { todas ->
+                if (verTodas) todas
+                else todas.filter { it.paquete in vigiladas || it.minutosDia > 0 }.take(12)
+            }
+    }
+    val hayMas = (lista?.size ?: 0) > ordenadas.size
+
+    LazyColumn(
+        Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(vertical = 20.dp),
+    ) {
+        item {
+            Text("Seal", style = MaterialTheme.typography.displayLarge)
+            Text(
+                "Te pone un tope de tiempo en las apps que elijas, y ese tope baja solo cada semana.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        // Lo primero que ve alguien que abre esto por primera vez. Antes no
+        // habia NADA que explicara que hace la app ni que significan sus
+        // numeros: salia una lista de apps y tres cifras sueltas.
+        item {
+            Desplegable("Cómo funciona", abiertoAlPrincipio = vigiladas.isEmpty()) {
+                Paso("1", "Mide", "Seal mira cuánto has usado cada app en los últimos 14 días. Ese es tu punto de partida: no se inventa un tope, usa el tuyo.")
+                Paso("2", "Aprieta", "Tu objetivo diario empieza en esa media y baja un 10 % cada semana, hasta un mínimo de ${SUELO_POR_DEFECTO_MIN} min al día. Nunca baja de ahí.")
+                Paso("3", "Corta", "Cuando abres una app vigilada empieza una sesión. Al agotarla, la app se bloquea y hay que esperar. Pasada la espera vuelve a estar libre y empieza otra sesión.")
+                Paso("4", "Fricción", "La pantalla de bloqueo tiene una salida, pero cuesta: 45 segundos mirándola. Está para que abrirla sin pensar deje de ser gratis.")
+                Text(
+                    "Si Seal se queda sin permisos, o el móvil mata el servicio, lo dirás en «Comprobaciones», abajo. No se calla nunca.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        item {
+            Rotulo("Qué apps te limita")
+            Text(
+                if (vigiladas.isEmpty())
+                    "Ninguna todavía. Abajo están tus apps ordenadas por lo que las usas de verdad — empieza por las de arriba."
+                else
+                    "${vigiladas.size} ${if (vigiladas.size == 1) "app vigilada" else "apps vigiladas"}. Las demás siguen libres.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        if (lista == null) {
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Text("Midiendo cuánto usas cada app…", style = MaterialTheme.typography.bodyMedium)
                 }
             }
+        }
+
+        items(ordenadas, key = { it.paquete }) { app ->
+            FilaDeApp(
+                app = app,
+                activa = app.paquete in vigiladas,
+                limites = remember(refresco, app.paquete, vigiladas) {
+                    if (app.paquete in vigiladas) almacen.limites(app.paquete) else null
+                },
+                alCambiar = { marcada ->
+                    // Se relee del almacen en vez de fiarse de lo que tenia la
+                    // pantalla: una sincronizacion pudo anadir apps desde el
+                    // chat mientras esto estaba abierto, y escribir la lista
+                    // vieja las borraria.
+                    val actuales = almacen.appsVigiladas()
+                    vigiladas = if (marcada) actuales + app.paquete else actuales - app.paquete
+                    almacen.guardarAppsVigiladas(vigiladas)
+                    // Se apunta cuando se tocó aquí: si también se editó desde
+                    // el chat, gana el cambio más reciente.
+                    almacen.marcarCambio(app.paquete)
+                    if (marcada) {
+                        // Catorce consultas al sistema: fuera del hilo
+                        // principal, o la interaccion mas importante de la app
+                        // se queda pillada medio segundo.
+                        alcance.launch(Dispatchers.IO) {
+                            val media = mediaDeUso(lector.minutosPorDia(app.paquete))
+                            almacen.guardarLimites(
+                                app.paquete,
+                                limitesDe(
+                                    media,
+                                    almacen.semanaDeLosLimites.coerceAtLeast(1),
+                                    almacen.suelo(app.paquete),
+                                ),
+                            )
+                            refresco++
+                        }
+                    }
+                },
+            )
+        }
+
+        if (hayMas && !verTodas) {
+            item {
+                TextButton(onClick = { verTodas = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Ver todas las apps", style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+
+        item { Comprobaciones(almacen, context) }
+
+        item {
+            Spacer(Modifier.height(4.dp))
+            Button(
+                onClick = { context.startActivity(Intent(context, Shell::class.java)) },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+            ) { Text("Abrir Disciplina", style = MaterialTheme.typography.labelLarge) }
+            Text(
+                "Tus tareas, el calendario y el chat. Es a donde lleva el icono del móvil.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun Paso(numero: String, titulo: String, texto: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+            numero,
+            style = MaterialTheme.typography.titleLarge,
+            color = ORO,
+            modifier = Modifier.width(18.dp),
+        )
+        Column {
+            Text(titulo, style = MaterialTheme.typography.titleMedium)
+            Text(
+                texto,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun FilaDeApp(
+    app: AppInstalada,
+    activa: Boolean,
+    limites: com.cerrojo.core.Limites?,
+    alCambiar: (Boolean) -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .border(
+                1.dp,
+                if (activa) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.outlineVariant,
+                MaterialTheme.shapes.medium,
+            )
+            .clickable { alCambiar(!activa) }
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(app.nombre, style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    // El dato que hace falta para decidir, justo donde se
+                    // decide. Antes habia que adivinar cual se usaba mas.
+                    if (app.minutosDia > 0) "${enHoras(app.minutosDia)} al día"
+                    else "Apenas la usas",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (app.minutosDia >= 60) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = activa, onCheckedChange = alCambiar)
+        }
+
+        if (activa) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            if (limites == null) {
+                Text("Calculando tus límites…", style = MaterialTheme.typography.bodySmall)
+            } else {
+                // En palabras, no tres cifras sueltas. "Objetivo 203 · sesion
+                // 20 · espera 80" no dice que pasa ni cuando.
+                Text(
+                    "Puedes usarla ${enHoras(limites.sesionMin)} seguidos. Después se bloquea " +
+                        "${enHoras(limites.enfriamientoMin)} y vuelve a abrirse sola.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    "Objetivo de esta semana: ${enHoras(limites.objetivoMin)} al día. " +
+                        if (app.minutosDia > limites.objetivoMin)
+                            "Ahora haces ${enHoras(app.minutosDia)}."
+                        else "Ya estás por debajo.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * El estado real del cerrojo. Va plegado porque no es lo que vienes a hacer,
+ * pero no se quita: es el unico sitio donde se ve que algo dejo de funcionar,
+ * y este proyecto ya ha tenido siete fallos que seguian diciendo que todo iba
+ * bien.
+ */
+@Composable
+private fun Comprobaciones(almacen: Almacen, context: android.content.Context) {
+    Desplegable("Comprobaciones") {
+        // El latido tiene que moverse solo. Un numero congelado se lee como
+        // "todo bien" justo cuando el servicio acaba de morir, que es el unico
+        // momento en que esta linea importa.
+        var ahora by remember { mutableLongStateOf(System.currentTimeMillis()) }
+        LaunchedEffect(Unit) {
+            while (true) {
+                delay(1000)
+                ahora = System.currentTimeMillis()
+            }
+        }
+
+        fun hace(ms: Long): String {
+            val s = (ahora - ms) / 1000
+            return if (s < 90) "hace $s s" else "hace ${s / 60} min"
+        }
+
+        Linea(
+            "El cerrojo está vivo",
+            if (almacen.ultimaComprobacionMs == 0L) "Aún no ha dado señales"
+            else "Última comprobación ${hace(almacen.ultimaComprobacionMs)}",
+            almacen.ultimaComprobacionMs != 0L,
+        )
+        // Sin esta linea, un espejo de avisos atascado (esquema cambiado,
+        // PostgREST fallando, o una consulta colgada que deja su guarda interna
+        // sin liberarse nunca) fallaba en total silencio: el reenganche dejaba
+        // de avisar y nada en la pantalla lo decia.
+        Linea(
+            "Avisos de tus tareas",
+            if (almacen.ultimoEspejoOkMs == 0L) "Aún no ha leído nada con éxito"
+            else "Leídos ${hace(almacen.ultimoEspejoOkMs)}",
+            almacen.ultimoEspejoOkMs != 0L,
+        )
+        // La misma idea: si esto se queda parado, el coach lleva dias
+        // razonando con numeros viejos y hasta ahora no habia forma de saberlo.
+        Linea(
+            "Tu uso llega al coach",
+            if (almacen.ultimaSyncOkMs == 0L) "Aún sin sincronizar"
+            else "Enviado ${hace(almacen.ultimaSyncOkMs)}",
+            almacen.ultimaSyncOkMs != 0L,
+        )
+
+        val sesion = remember { com.cerrojo.datos.Sesion(context) }
+        // Se mira si hay cuenta guardada, no si el token responde ahora mismo:
+        // preguntarselo a la red diria "sin cuenta" cada vez que no hay
+        // cobertura, que es mentira.
+        val hayCuenta = remember { sesion.hayCuenta() }
+        Linea(
+            "Tu cuenta",
+            if (hayCuenta) "Conectada. La web de dentro entra con esta misma."
+            else "Sin conectar. Ciérrala y vuelve a abrir Seal para entrar.",
+            hayCuenta,
+        )
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            Linea(
+                "Notificaciones",
+                "Las has denegado. El cerrojo sigue funcionando, pero no verás si se muere.",
+                false,
+            )
+        }
+    }
+}
+
+@Composable
+private fun Linea(que: String, estado: String, bien: Boolean) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            if (bien) "·" else "!",
+            style = MaterialTheme.typography.titleMedium,
+            color = if (bien) ORO else MaterialTheme.colorScheme.primary,
+            modifier = Modifier.width(10.dp),
+        )
+        Column {
+            Text(que, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                estado,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
