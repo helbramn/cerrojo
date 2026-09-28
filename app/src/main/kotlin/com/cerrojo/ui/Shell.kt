@@ -35,6 +35,15 @@ class Shell : ComponentActivity() {
      */
     private var sinConexion by mutableStateOf(false)
 
+    /**
+     * La web ha mandado a su propia pantalla de entrada. Pasa si es la primera
+     * vez sin haber entrado en Seal, o si el navegador perdio sus cookies.
+     * En vez de dejar que escriba la contraseña ahi —con lo que el lado nativo
+     * seguiria sin cuenta y volveria a pedirsela— se ofrece entrar aqui una
+     * vez, que sirve para las dos.
+     */
+    private var webPideEntrar by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val url = Almacen(this).urlWeb
@@ -46,7 +55,7 @@ class Shell : ComponentActivity() {
                 // Con el aviso de sin conexion delante, retroceder movería un
                 // WebView que el usuario no ve: parecería que atras no hace
                 // nada. Ahi se sale, que es lo unico con efecto visible.
-                if (!sinConexion && w != null && w.canGoBack()) w.goBack() else finish()
+                if (!sinConexion && !webPideEntrar && w != null && w.canGoBack()) w.goBack() else finish()
             }
         })
 
@@ -70,6 +79,11 @@ class Shell : ComponentActivity() {
                                 webViewClient = object : WebViewClient() {
                                     override fun onPageStarted(v: WebView?, u: String?, f: Bitmap?) {
                                         CookieManager.getInstance().flush()
+                                        // El proxy de la web manda a /login
+                                        // cuando no hay sesion. Es la unica
+                                        // señal fiable de que la entrega no
+                                        // llego o ya no vale.
+                                        if (u != null && u.contains("/login")) webPideEntrar = true
                                     }
                                     override fun onReceivedError(
                                         v: WebView, req: WebResourceRequest, err: WebResourceError,
@@ -126,6 +140,37 @@ class Shell : ComponentActivity() {
                                 // que fallo, no la portada.
                                 web?.reload()
                             }) { Text("Reintentar") }
+                        }
+                    }
+
+                    if (webPideEntrar) {
+                        Column(
+                            Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.background)
+                                // Igual que el aviso de sin conexion: pintar un
+                                // fondo no reclama los toques, y sin esto se
+                                // podria escribir en el formulario de la web
+                                // que hay justo debajo sin verlo.
+                                .pointerInput(Unit) {
+                                    awaitPointerEventScope {
+                                        while (true) {
+                                            awaitPointerEvent().changes.forEach { it.consume() }
+                                        }
+                                    }
+                                },
+                        ) {
+                            PantallaDeEntrada(
+                                titulo = "Entra una vez",
+                                explicacion = "La web te pide iniciar sesión. Hazlo aquí y vale para las dos: la app y la web de dentro.",
+                                alEntrar = {
+                                    webPideEntrar = false
+                                    // Se recarga por la ruta de entrega, que es
+                                    // la que planta la sesion en el navegador.
+                                    web?.loadUrl(urlDeEntrada(Almacen(this@Shell).urlWeb))
+                                },
+                                alSaltar = { webPideEntrar = false },
+                            )
                         }
                     }
 

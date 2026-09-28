@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import com.cerrojo.datos.Almacen
+import com.cerrojo.datos.Sesion
 import com.cerrojo.servicio.ServicioDeVigilancia
 import com.cerrojo.sistema.Permisos
 
@@ -34,6 +35,12 @@ class Principal : ComponentActivity() {
             TemaDeSeal {
                 val almacen = remember { Almacen(this@Principal) }
                 var hecho by remember { mutableStateOf(almacen.asistenteHecho) }
+                // Se comprueba si hay cuenta guardada, no si el token responde
+                // ahora mismo: preguntarselo a la red haria aparecer la
+                // pantalla de entrada cada vez que estas sin cobertura,
+                // pidiendo una contraseña que nadie ha invalidado.
+                var hayCuenta by remember { mutableStateOf(Sesion(this@Principal).hayCuenta()) }
+                var entrarDespues by remember { mutableStateOf(false) }
                 val faltan = remember(visitas) {
                     Permisos.todos.any { it.puestoSegunElSistema(this@Principal) == false }
                 }
@@ -46,6 +53,15 @@ class Principal : ComponentActivity() {
                         almacen.asistenteHecho = true
                         hecho = true
                     })
+                } else if (!hayCuenta && !entrarDespues && !abrirAjustes) {
+                    // ANTES del WebView, no despues. El puente hacia la web se
+                    // crea al entrar aqui; si se entra primero en la web, el
+                    // lado nativo no se entera y acabas escribiendo la
+                    // contraseña dos veces, que es justo lo que pasaba.
+                    PantallaDeEntrada(
+                        alEntrar = { hayCuenta = true },
+                        alSaltar = { entrarDespues = true },
+                    )
                 } else if (abrirAjustes || almacen.appsVigiladas().isEmpty()) {
                     // Entrada explicita desde Shell, o recien salido del
                     // asistente sin ninguna app elegida todavia: aqui es donde
