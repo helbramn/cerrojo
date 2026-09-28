@@ -31,8 +31,15 @@ private data class AppInstalada(
     val paquete: String,
     val nombre: String,
     val deUsuario: Boolean,
-    /** Minutos al dia que se usa de verdad, mediana de los ultimos 14 dias. */
+    /**
+     * Tu dia tipico con esta app. Sale de mediaDeUso() del core, la MISMA
+     * funcion con la que el motor calcula el objetivo: antes esta pantalla
+     * tenia su propia mediana, y dos caminos distintos leyendo el uso pueden
+     * enseñar un numero y limitar por otro.
+     */
     val minutosDia: Int,
+    /** Lo que llevas hoy, que es lo que todo el mundo cree que dice el otro. */
+    val minutosHoy: Int,
 )
 
 /** "2 h 30 min" se entiende; "150 min" hay que traducirlo mentalmente. */
@@ -40,12 +47,6 @@ private fun enHoras(minutos: Int): String = when {
     minutos < 60 -> "$minutos min"
     minutos % 60 == 0 -> "${minutos / 60} h"
     else -> "${minutos / 60} h ${minutos % 60} min"
-}
-
-private fun mediana(valores: List<Int>): Int {
-    if (valores.isEmpty()) return 0
-    val o = valores.sorted()
-    return if (o.size % 2 == 1) o[o.size / 2] else (o[o.size / 2 - 1] + o[o.size / 2]) / 2
 }
 
 @Composable
@@ -122,9 +123,12 @@ fun PantallaDeAjustes() {
             // por app son cientos de llamadas al sistema y la pantalla tarda
             // segundos en aparecer.
             val porPaquete = mutableMapOf<String, MutableList<Int>>()
+            val hoyPorPaquete = mutableMapOf<String, Int>()
             val queridos = abribles.map { it.packageName }.toSet()
+            val hoy = java.time.LocalDate.now(java.time.ZoneId.of("Europe/Madrid")).toString()
             for (fila in lector.usoPorAppYDia(14) { it in queridos }) {
                 porPaquete.getOrPut(fila.paquete) { mutableListOf() }.add(fila.minutos)
+                if (fila.fecha == hoy) hoyPorPaquete[fila.paquete] = fila.minutos
             }
 
             abribles.map {
@@ -132,7 +136,11 @@ fun PantallaDeAjustes() {
                     it.packageName,
                     pm.getApplicationLabel(it).toString(),
                     (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0,
-                    mediana(porPaquete[it.packageName].orEmpty()),
+                    // mediaDeUso devuelve 30 min por defecto con menos de tres
+                    // dias de historial, y ese es exactamente el numero con el
+                    // que se calcularia el limite. Enseñar otro seria mentir.
+                    porPaquete[it.packageName]?.let { d -> mediaDeUso(d) } ?: 0,
+                    hoyPorPaquete[it.packageName] ?: 0,
                 )
             }
         }
@@ -174,8 +182,8 @@ fun PantallaDeAjustes() {
         item {
             Desplegable("Cómo funciona", abiertoAlPrincipio = vigiladas.isEmpty()) {
                 Paso("1", "Mide", "Seal mira cuánto has usado cada app en los últimos 14 días. Ese es tu punto de partida: no se inventa un tope, usa el tuyo.")
-                Paso("2", "Aprieta", "Tu objetivo diario empieza en esa media y baja un 10 % cada semana, hasta un mínimo de ${SUELO_POR_DEFECTO_MIN} min al día. Nunca baja de ahí.")
-                Paso("3", "Corta", "Cuando abres una app vigilada empieza una sesión. Al agotarla, la app se bloquea y hay que esperar. Pasada la espera vuelve a estar libre y empieza otra sesión.")
+                Paso("2", "Aprieta", "Tu objetivo diario empieza siendo exactamente esa media —la primera semana no te quita nada— y baja un 10 % cada lunes, hasta un mínimo de ${SUELO_POR_DEFECTO_MIN} min al día. Nunca baja de ahí.")
+                Paso("3", "Corta", "Esto sí aprieta desde el primer día: al abrir una app vigilada empieza una sesión de como mucho 20 min. Al agotarla se bloquea y hay que esperar. Pasada la espera vuelve a estar libre y empieza otra sesión.")
                 Paso("4", "Fricción", "La pantalla de bloqueo tiene una salida, pero cuesta: 45 segundos mirándola. Está para que abrirla sin pensar deje de ser gratis.")
                 Text(
                     "Si Seal se queda sin permisos, o el móvil mata el servicio, lo dirás en «Comprobaciones», abajo. No se calla nunca.",
@@ -316,8 +324,10 @@ private fun FilaDeApp(
                 Text(app.nombre, style = MaterialTheme.typography.bodyLarge)
                 Text(
                     // El dato que hace falta para decidir, justo donde se
-                    // decide. Antes habia que adivinar cual se usaba mas.
-                    if (app.minutosDia > 0) "${enHoras(app.minutosDia)} al día"
+                    // decide. Y dice de que periodo es: "al dia" a secas se
+                    // lee como "hoy", que es otra cosa.
+                    if (app.minutosDia > 0)
+                        "${enHoras(app.minutosDia)} al día de media · hoy ${enHoras(app.minutosHoy)}"
                     else "Apenas la usas",
                     style = MaterialTheme.typography.bodySmall,
                     color = if (app.minutosDia >= 60) MaterialTheme.colorScheme.primary
@@ -342,8 +352,8 @@ private fun FilaDeApp(
                 Text(
                     "Objetivo de esta semana: ${enHoras(limites.objetivoMin)} al día. " +
                         if (app.minutosDia > limites.objetivoMin)
-                            "Ahora haces ${enHoras(app.minutosDia)}."
-                        else "Ya estás por debajo.",
+                            "Tu media es ${enHoras(app.minutosDia)}."
+                        else "Tu media ya está por debajo.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.MaterialTheme
@@ -41,6 +42,9 @@ class Principal : ComponentActivity() {
                 // pidiendo una contraseña que nadie ha invalidado.
                 var hayCuenta by remember { mutableStateOf(Sesion(this@Principal).hayCuenta()) }
                 var entrarDespues by remember { mutableStateOf(false) }
+                // El menu abre los limites sin cambiar de Activity; atras
+                // vuelve al menu en vez de cerrar la app.
+                var enLimites by remember { mutableStateOf(abrirAjustes) }
                 val faltan = remember(visitas) {
                     Permisos.todos.any { it.puestoSegunElSistema(this@Principal) == false }
                 }
@@ -66,23 +70,22 @@ class Principal : ComponentActivity() {
                         alEntrar = { hayCuenta = true },
                         alSaltar = { entrarDespues = true },
                     )
-                } else if (abrirAjustes || almacen.appsVigiladas().isEmpty()) {
-                    // Entrada explicita desde Shell, o recien salido del
-                    // asistente sin ninguna app elegida todavia: aqui es donde
-                    // vive de verdad la lista de apps vigiladas y la cuenta.
-                    // Sin esto se entraba en la app de disciplina sin haber
-                    // vigilado nada, y el bucle del servicio no tenia sobre
-                    // que actuar.
+                } else if (enLimites) {
+                    BackHandler(enabled = true) { enLimites = false }
                     PantallaDeAjustes()
                 } else {
-                    // El icono del lanzador tiene que llevar a la app de
-                    // disciplina (spec §11), no a una lista de permisos y
-                    // apps vigiladas: esta pantalla solo decide adonde ir y
-                    // se cierra, no se queda de por medio.
-                    LaunchedEffect(Unit) {
-                        startActivity(Intent(this@Principal, Shell::class.java))
-                        finish()
-                    }
+                    // El menu con las dos puertas, pedido explicitamente por el
+                    // usuario. Sustituye a la decision anterior de que el icono
+                    // abriera Disciplina directamente (spec §11, criterio 5):
+                    // asi la mitad de la app —los limites— dejaba de existir
+                    // salvo para quien encontrara el engranaje de una esquina.
+                    Menu(
+                        almacen = almacen,
+                        alAbrirDisciplina = {
+                            startActivity(Intent(this@Principal, Shell::class.java))
+                        },
+                        alAbrirSeal = { enLimites = true },
+                    )
                 }
             }
         }
