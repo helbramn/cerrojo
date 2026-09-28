@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -76,13 +77,19 @@ private val ESQUEMA = darkColorScheme(
  * los pesos— asi que el peso se fija con FontVariation en vez de meter un
  * fichero por peso: pesan 125 KB y 851 KB, y duplicarlos por cada grosor
  * engordaria el APK sin necesidad.
+ *
+ * FontVariation sigue marcada como experimental en Compose 1.7 y sin el OptIn
+ * la compilacion falla. No es inestable en la practica —lleva ahi desde la
+ * 1.5— pero al subir de version hay que volver a mirarlo.
  */
+@OptIn(ExperimentalTextApi::class)
 private fun cinzel(peso: Int) = Font(
     R.font.cinzel_variable,
     weight = FontWeight(peso),
     variationSettings = FontVariation.Settings(FontVariation.weight(peso)),
 )
 
+@OptIn(ExperimentalTextApi::class)
 private fun garamond(peso: Int) = Font(
     R.font.eb_garamond_variable,
     weight = FontWeight(peso),
