@@ -60,7 +60,7 @@ class EspejoDeAvisos(private val context: Context) {
         olvidarDiasPasados(hoy)
 
         val json = sesion.obtener(
-            "/rest/v1/task_logs?select=task_id,status,reminded_at&log_date=eq.$hoy"
+            "/rest/v1/task_logs?select=task_id,status,reminded_at,toque_en,aviso_titulo,aviso_texto&log_date=eq.$hoy"
         )
         if (json == null) {
             avisarSiSePerdioLaSesion()
@@ -80,11 +80,23 @@ class EspejoDeAvisos(private val context: Context) {
             val id = fila.optString("task_id")
             if (id.isEmpty()) continue
             val estado = fila.optString("status")
-            val huella = estado + "|" + fila.optString("reminded_at")
+            // La huella incluye el texto: el servidor manda varios avisos por
+            // tarea y dia —el de la hora, los tirones de orejas, el fallo— y
+            // sin el texto dentro, el segundo y los siguientes se tomaban por
+            // repetidos y no se mostraban nunca.
+            val huella = estado + "|" + fila.optString("reminded_at") +
+                "|" + fila.optString("toque_en") + "|" + fila.optString("aviso_texto")
             if (prefs.getString("visto:$id:$hoy", null) == huella) continue
             prefs.edit().putString("visto:$id:$hoy", huella).apply()
 
+            // El texto lo escribe el servidor y viene en la fila. Antes cada
+            // canal se inventaba el suyo, y el de aqui ni siquiera decia que
+            // tarea era: "Tienes una obligatoria sin marcar" con siete tareas
+            // activas no dice nada. Los textos de abajo son el respaldo para
+            // una fila escrita por una version anterior del reenganche.
+            val delServidor = fila.optString("aviso_texto").takeIf { it.isNotEmpty() }
             val texto = when {
+                delServidor != null -> delServidor
                 estado == "fallida" -> "Has fallado una obligatoria. La barra ya lo ha notado."
                 // Posponer es una decision del usuario, no un descuido: darle
                 // la lata igual seria castigarle por haber hecho algo.
@@ -92,10 +104,18 @@ class EspejoDeAvisos(private val context: Context) {
                 !fila.isNull("reminded_at") -> "Tienes una obligatoria sin marcar. ¿A qué esperas?"
                 else -> continue
             }
+            // Marcada o pospuesta no se avisa, aunque el servidor haya dejado
+            // texto de un aviso anterior del mismo dia.
+            if (estado == "pospuesta" || estado == "hecha") continue
+
+            val titulo = fila.optString("aviso_titulo").takeIf { it.isNotEmpty() } ?: "Disciplina"
             context.getSystemService(NotificationManager::class.java)
                 .notify(id.hashCode(), NotificationCompat.Builder(context, CANAL)
-                    .setContentTitle("Disciplina")
+                    .setContentTitle(titulo)
                     .setContentText(texto)
+                    // Sin esto Android corta el texto en una linea y el aviso
+                    // pierde justo lo que lo hace util: la hora y el retraso.
+                    .setStyle(NotificationCompat.BigTextStyle().bigText(texto))
                     .setSmallIcon(R.drawable.ic_aviso)
                     .setAutoCancel(true)
                     // El reenganche existe para que se pueda actuar sobre el

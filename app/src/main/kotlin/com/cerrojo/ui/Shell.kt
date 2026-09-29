@@ -72,6 +72,15 @@ class Shell : ComponentActivity() {
                         factory = { ctx ->
                             WebView(ctx).apply {
                                 settings.javaScriptEnabled = true
+                                // Que la web sepa que esta dentro de Seal.
+                                // El WebView de Android no tiene Push API,
+                                // asi que ahi el boton de activar
+                                // notificaciones no puede funcionar NUNCA y
+                                // la web decia 'este navegador no puede
+                                // avisarte': cierto, pero inutil, porque
+                                // aqui los avisos los da Seal.
+                                settings.userAgentString =
+                                    settings.userAgentString + " Seal/1.3"
                                 settings.domStorageEnabled = true
                                 settings.databaseEnabled = true
                                 CookieManager.getInstance().setAcceptCookie(true)
