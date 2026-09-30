@@ -180,6 +180,22 @@ Kotlin lo trata como función experimental. Pasó **dos veces** en este repo.
 
 ---
 
+### "Seguidos" que no eran seguidos (v1.4)
+
+**Qué se rompía**: Ajustes decía "puedes usarla 20 min seguidos", pero el
+reloj de sesión solo volvía a cero al terminar un descanso. Sumaba todos los
+ratos del día: tres ratos sueltos de 7 minutos bloqueaban 80 minutos sin haber
+estado nunca 20 seguidos. El usuario lo notó como "me bloquea antes de lo que
+debería" y no tenía forma de comprobarlo, porque la pantalla de bloqueo solo
+decía "Toca descansar. Vuelve luego."
+
+**Arreglo**: salir de la app 5 minutos (`PAUSA_QUE_CIERRA_SESION_MS`, elegido
+por el usuario) cierra la sesión. Las salidas cortas no, para que entrar y
+salir no sirva de trampa. El desbloqueo con fricción pone a cero la marca de
+último uso: si no, desbloquear tras 5 minutos de descanso reiniciaba la sesión
+y daba la sesión entera en vez de los 5 minutos. La pantalla de bloqueo dice
+ahora el motivo, a qué hora se puede volver y cuánto queda del día.
+
 ## Errores de interpretación, no de código
 
 ### Iconos inventados en vez de usar la referencia

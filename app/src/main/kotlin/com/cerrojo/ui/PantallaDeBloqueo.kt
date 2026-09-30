@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.cerrojo.core.Estado
 import com.cerrojo.core.Evento
@@ -19,6 +20,9 @@ import com.cerrojo.core.avanzar
 import com.cerrojo.core.limitesDe
 import com.cerrojo.datos.Almacen
 import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private const val SEGUNDOS_DE_FRICCION = 45
 
@@ -58,6 +62,7 @@ class PantallaDeBloqueo : ComponentActivity() {
             .getOrDefault(Estado.ENFRIANDO)
         val almacen = Almacen(this)
         val nombre = nombreDeApp(paquete)
+        val detalle = detalleDelBloqueo(almacen, paquete, estado)
 
         setContent {
             TemaDeSeal {
@@ -101,6 +106,13 @@ class PantallaDeBloqueo : ComponentActivity() {
                             else "Toca descansar. Vuelve luego.",
                             style = MaterialTheme.typography.bodyLarge,
                         )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            detalle,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        )
                         Spacer(Modifier.height(40.dp))
                         Button(onClick = { irAlInicio() }, Modifier.fillMaxWidth()) { Text("Salir") }
                         Spacer(Modifier.height(16.dp))
@@ -114,6 +126,26 @@ class PantallaDeBloqueo : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Por que se bloquea y hasta cuando. Antes solo decia "Toca descansar.
+     * Vuelve luego.", y con eso el usuario no podia saber si el bloqueo era
+     * el que tocaba: se quejo de que le bloqueaba antes de tiempo y no habia
+     * manera de comprobarlo desde el movil.
+     */
+    private fun detalleDelBloqueo(almacen: Almacen, paquete: String, estado: Estado): String {
+        val limites = almacen.limites(paquete) ?: limitesDe(30, 1)
+        val e = almacen.estado(paquete)
+        val quedanMin = ((limites.presupuestoMin * 60 + e.extraHoySeg - e.segHoy) / 60).coerceAtLeast(0)
+        return if (estado == Estado.SIN_PRESUPUESTO) {
+            "Has llegado a tu tope de ${enHoras(limites.presupuestoMin)} al día. " +
+                "Vuelve a abrirse a las %02d:00.".format(almacen.horaDeReinicioH)
+        } else {
+            val vuelta = SimpleDateFormat("HH:mm", Locale.US).format(Date(e.finEnfriamientoMs))
+            "Llevas ${enHoras(limites.sesionMin)} seguidos. Puedes volver a las $vuelta. " +
+                "Hoy te quedan ${enHoras(quedanMin)}."
         }
     }
 

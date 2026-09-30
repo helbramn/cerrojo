@@ -21,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.cerrojo.core.PAUSA_QUE_CIERRA_SESION_MS
 import com.cerrojo.core.SUELO_POR_DEFECTO_MIN
 import com.cerrojo.core.limitesDe
 import com.cerrojo.core.mediaDeUso
@@ -43,7 +44,7 @@ private data class AppInstalada(
 )
 
 /** "2 h 30 min" se entiende; "150 min" hay que traducirlo mentalmente. */
-private fun enHoras(minutos: Int): String = when {
+internal fun enHoras(minutos: Int): String = when {
     minutos < 60 -> "$minutos min"
     minutos % 60 == 0 -> "${minutos / 60} h"
     else -> "${minutos / 60} h ${minutos % 60} min"
@@ -346,7 +347,8 @@ private fun FilaDeApp(
                 // 20 · espera 80" no dice que pasa ni cuando.
                 Text(
                     "Puedes usarla ${enHoras(limites.sesionMin)} seguidos. Después se bloquea " +
-                        "${enHoras(limites.enfriamientoMin)} y vuelve a abrirse sola.",
+                        "${enHoras(limites.enfriamientoMin)} y vuelve a abrirse sola. " +
+                        "Si la dejas ${PAUSA_QUE_CIERRA_SESION_MS / 60_000} min, la cuenta empieza de cero.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(

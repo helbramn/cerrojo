@@ -68,8 +68,9 @@ class EstadosTest {
         val fuera = tics(60, enMarcha, ahoraMs = 120_000L, enPrimerPlano = false)
         assertEquals(120, fuera.segSesion)
 
-        // Si volver reiniciara la sesion, el limite se esquivaria saltando de
-        // app y volviendo.
+        // Una salida corta no reinicia la sesion: si lo hiciera, el limite se
+        // esquivaria saltando de app y volviendo. Solo una pausa de
+        // PAUSA_QUE_CIERRA_SESION_MS la cierra (test de mas abajo).
         val vuelta = tics(1, fuera, ahoraMs = 180_000L)
         assertEquals(121, vuelta.segSesion)
     }
@@ -115,5 +116,52 @@ class EstadosTest {
         assertEquals(Estado.EN_SESION, casi.estado)
         val agotado = tics(1, casi, ahoraMs = 2_000L + (5 * 60 - 1) * 1000L)
         assertEquals(Estado.ENFRIANDO, agotado.estado)
+    }
+
+    @Test fun `salir cinco minutos cierra la sesion y la siguiente empieza de cero`() {
+        val usada = tics(6 * 60, EstadoApp())
+        assertEquals(360, usada.segSesion)
+        val vuelta = 6 * 60 * 1000L + PAUSA_QUE_CIERRA_SESION_MS
+        val e = avanzar(usada, Evento.Tick(true, vuelta, hoy), limites)
+        assertEquals(Estado.EN_SESION, e.estado)
+        assertEquals(1, e.segSesion)
+        // El presupuesto del dia no se reinicia: solo la sesion.
+        assertEquals(361, e.segHoy)
+    }
+
+    @Test fun `una salida corta no cierra la sesion`() {
+        val usada = tics(6 * 60, EstadoApp())
+        val vuelta = 6 * 60 * 1000L + 2 * 60_000L
+        val e = avanzar(usada, Evento.Tick(true, vuelta, hoy), limites)
+        assertEquals(361, e.segSesion)
+    }
+
+    @Test fun `ratos sueltos separados por pausas largas no bloquean`() {
+        // Sesion de 10 min: tres ratos de 6 separados por pausas de 10 nunca
+        // llegan a 10 seguidos. Antes sumaban 18 y bloqueaban.
+        var e = EstadoApp()
+        var ahora = 0L
+        repeat(3) {
+            e = tics(6 * 60, e, ahoraMs = ahora)
+            ahora += 6 * 60 * 1000L + 10 * 60_000L
+        }
+        assertEquals(Estado.EN_SESION, e.estado)
+        assertEquals(18 * 60, e.segHoy)
+    }
+
+    @Test fun `con la app fuera la pausa larga deja el estado libre`() {
+        val usada = tics(60, EstadoApp())
+        val e = avanzar(usada, Evento.Tick(false, 60_000L + PAUSA_QUE_CIERRA_SESION_MS, hoy), limites)
+        assertEquals(Estado.LIBRE, e.estado)
+        assertEquals(0, e.segSesion)
+    }
+
+    @Test fun `desbloquear tras un descanso largo da cinco minutos, no una sesion entera`() {
+        val enfriando = tics(10 * 60, EstadoApp())
+        val desbloqueado = avanzar(enfriando, Evento.Desbloqueo, limites)
+        // Vuelve a la app 20 minutos despues de bloquearse.
+        val vuelta = enfriando.finEnfriamientoMs - 20 * 60_000L
+        val e = tics(5 * 60, desbloqueado, ahoraMs = vuelta)
+        assertEquals(Estado.ENFRIANDO, e.estado)
     }
 }
