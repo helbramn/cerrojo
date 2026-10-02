@@ -196,6 +196,17 @@ salir no sirva de trampa. El desbloqueo con fricción pone a cero la marca de
 y daba la sesión entera en vez de los 5 minutos. La pantalla de bloqueo dice
 ahora el motivo, a qué hora se puede volver y cuánto queda del día.
 
+### Texto negro sobre fondo negro (v1.5)
+
+**Qué se rompía**: en Ajustes no se veían los nombres de las apps. `Text` sin
+color explícito toma `LocalContentColor`, y ese valor no lo pone
+`MaterialTheme`: lo pone `Surface`. Las pantallas de Seal van sobre un `Box`
+con el fondo pintado a mano, así que todo texto sin color salía **negro**,
+invisible sobre el negro del fondo.
+
+**Arreglo**: `TemaDeSeal` provee `LocalContentColor` con el color de texto de
+la web. Una vez, en la raíz, para todas las pantallas.
+
 ## Errores de interpretación, no de código
 
 ### Iconos inventados en vez de usar la referencia
