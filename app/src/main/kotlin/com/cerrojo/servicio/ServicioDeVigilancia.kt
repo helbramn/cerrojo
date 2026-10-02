@@ -20,6 +20,7 @@ import androidx.core.app.ServiceCompat
 import com.cerrojo.core.Evento
 import com.cerrojo.core.bloqueada
 import com.cerrojo.core.avanzar
+import com.cerrojo.core.limitesConObjetivo
 import com.cerrojo.core.limitesDe
 import com.cerrojo.core.mediaDeUso
 import com.cerrojo.core.semana
@@ -261,9 +262,12 @@ class ServicioDeVigilancia : Service() {
         Thread {
             try {
                 for (paquete in almacen.appsVigiladas()) {
+                    // Con tope elegido a mano no hay nada que recalcular el
+                    // lunes: el numero es el que el usuario puso.
                     almacen.guardarLimites(
                         paquete,
-                        limitesDe(mediaDeUso(lector.minutosPorDia(paquete)), n, almacen.suelo(paquete)),
+                        almacen.topeFijo(paquete)?.let { limitesConObjetivo(it) }
+                            ?: limitesDe(mediaDeUso(lector.minutosPorDia(paquete)), n, almacen.suelo(paquete)),
                     )
                 }
                 // Solo se marca la semana como resuelta si el bucle entero

@@ -55,6 +55,18 @@ class Almacen(context: Context) {
         prefs.edit().putInt("suelo:$paquete", minutos).apply()
 
     /**
+     * Tope diario elegido a mano en Ajustes, o null si va en automatico (de tu
+     * media, bajando cada lunes). Si hay tope, manda el tope.
+     */
+    fun topeFijo(paquete: String): Int? =
+        prefs.getInt("tope:$paquete", 0).takeIf { it > 0 }
+
+    fun guardarTopeFijo(paquete: String, minutos: Int?) =
+        prefs.edit().apply {
+            if (minutos == null) remove("tope:$paquete") else putInt("tope:$paquete", minutos)
+        }.apply()
+
+    /**
      * Cuando se toco por ultima vez la vigilancia de esta app EN ESTE MOVIL.
      * El usuario puede editar desde el chat y desde aqui, asi que hace falta
      * saber cual de los dos cambios es mas reciente: gana el ultimo.

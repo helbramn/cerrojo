@@ -65,4 +65,16 @@ class LimitesTest {
         // el maximo de 90 que fija la spec, asi que ese tope nunca llega a morder.
         assertEquals(80, largo.enfriamientoMin)
     }
+
+    @Test fun `un tope elegido a mano da su sesion y su descanso`() {
+        assertEquals(Limites(80, 20, 80, 80), limitesConObjetivo(80))
+        assertEquals(Limites(30, 8, 32, 30), limitesConObjetivo(30))
+        // Topes pequenos: la sesion no baja de 5 ni el descanso de 20.
+        assertEquals(Limites(10, 5, 20, 10), limitesConObjetivo(10))
+    }
+
+    @Test fun `el calculo automatico da lo mismo que el tope con su objetivo`() {
+        val auto = limitesDe(120, 1)
+        assertEquals(limitesConObjetivo(auto.objetivoMin), auto)
+    }
 }

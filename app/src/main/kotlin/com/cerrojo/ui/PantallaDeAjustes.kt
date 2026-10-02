@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -23,6 +24,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.cerrojo.core.PAUSA_QUE_CIERRA_SESION_MS
 import com.cerrojo.core.SUELO_POR_DEFECTO_MIN
+import com.cerrojo.core.limitesConObjetivo
 import com.cerrojo.core.limitesDe
 import com.cerrojo.core.mediaDeUso
 import com.cerrojo.datos.Almacen
@@ -183,8 +185,8 @@ fun PantallaDeAjustes() {
         item {
             Desplegable("Cómo funciona", abiertoAlPrincipio = vigiladas.isEmpty()) {
                 Paso("1", "Mide", "Seal mira cuánto has usado cada app en los últimos 14 días. Ese es tu punto de partida: no se inventa un tope, usa el tuyo.")
-                Paso("2", "Aprieta", "Tu objetivo diario empieza siendo exactamente esa media —la primera semana no te quita nada— y baja un 10 % cada lunes, hasta un mínimo de ${SUELO_POR_DEFECTO_MIN} min al día. Nunca baja de ahí.")
-                Paso("3", "Corta", "Esto sí aprieta desde el primer día: al abrir una app vigilada empieza una sesión de como mucho 20 min. Al agotarla se bloquea y hay que esperar. Pasada la espera vuelve a estar libre y empieza otra sesión.")
+                Paso("2", "Aprieta", "Tu objetivo diario empieza siendo exactamente esa media —la primera semana no te quita nada— y baja un 10 % cada lunes, hasta un mínimo de ${SUELO_POR_DEFECTO_MIN} min al día. Nunca baja de ahí. Si prefieres un número fijo, elígelo tú en cada app con − y +.")
+                Paso("3", "Corta", "Esto sí aprieta desde el primer día: al abrir una app vigilada empieza una sesión de como mucho 20 min seguidos. Al agotarla se bloquea y hay que esperar. Si la dejas 5 min, la sesión se cierra y la siguiente empieza de cero; el tope del día sigue contando todo.")
                 Paso("4", "Fricción", "La pantalla de bloqueo tiene una salida, pero cuesta: 45 segundos mirándola. Está para que abrirla sin pensar deje de ser gratis.")
                 Text(
                     "Si Seal se queda sin permisos, o el móvil mata el servicio, lo dirás en «Comprobaciones», abajo. No se calla nunca.",
@@ -239,17 +241,17 @@ fun PantallaDeAjustes() {
                         // principal, o la interaccion mas importante de la app
                         // se queda pillada medio segundo.
                         alcance.launch(Dispatchers.IO) {
-                            val media = mediaDeUso(lector.minutosPorDia(app.paquete))
-                            almacen.guardarLimites(
-                                app.paquete,
-                                limitesDe(
-                                    media,
-                                    almacen.semanaDeLosLimites.coerceAtLeast(1),
-                                    almacen.suelo(app.paquete),
-                                ),
-                            )
+                            almacen.guardarLimites(app.paquete, limitesAutomaticosOFijos(almacen, lector, app.paquete))
                             refresco++
                         }
+                    }
+                },
+                tope = remember(refresco, app.paquete) { almacen.topeFijo(app.paquete) },
+                alCambiarTope = { minutos ->
+                    almacen.guardarTopeFijo(app.paquete, minutos)
+                    alcance.launch(Dispatchers.IO) {
+                        almacen.guardarLimites(app.paquete, limitesAutomaticosOFijos(almacen, lector, app.paquete))
+                        refresco++
                     }
                 },
             )
@@ -281,6 +283,15 @@ fun PantallaDeAjustes() {
     }
 }
 
+/** Tope elegido a mano si lo hay; si no, el automatico de la media. */
+private fun limitesAutomaticosOFijos(almacen: Almacen, lector: LectorDeUso, paquete: String) =
+    almacen.topeFijo(paquete)?.let { limitesConObjetivo(it) }
+        ?: limitesDe(
+            mediaDeUso(lector.minutosPorDia(paquete)),
+            almacen.semanaDeLosLimites.coerceAtLeast(1),
+            almacen.suelo(paquete),
+        )
+
 @Composable
 private fun Paso(numero: String, titulo: String, texto: String) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -307,6 +318,8 @@ private fun FilaDeApp(
     activa: Boolean,
     limites: com.cerrojo.core.Limites?,
     alCambiar: (Boolean) -> Unit,
+    tope: Int?,
+    alCambiarTope: (Int?) -> Unit,
 ) {
     Column(
         Modifier
@@ -351,15 +364,54 @@ private fun FilaDeApp(
                         "Si la dejas ${PAUSA_QUE_CIERRA_SESION_MS / 60_000} min, la cuenta empieza de cero.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
+                SelectorDeTope(
+                    objetivoMin = limites.objetivoMin,
+                    fijo = tope != null,
+                    alCambiar = alCambiarTope,
+                )
                 Text(
-                    "Objetivo de esta semana: ${enHoras(limites.objetivoMin)} al día. " +
-                        if (app.minutosDia > limites.objetivoMin)
-                            "Tu media es ${enHoras(app.minutosDia)}."
-                        else "Tu media ya está por debajo.",
+                    if (tope != null) "Tope elegido por ti: no cambia solo."
+                    else "Automático: sale de tu media (${enHoras(app.minutosDia)}) y baja cada lunes.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+    }
+}
+
+/**
+ * Elegir el tope diario de una app a mano: de 15 en 15 minutos, entre 15 min
+ * y 4 h. "Automático" vuelve al calculo de siempre. La sesion y el descanso
+ * salen del tope con la misma regla de siempre (limitesConObjetivo), y la
+ * frase de encima lo dice en cuanto cambia.
+ */
+@Composable
+private fun SelectorDeTope(objetivoMin: Int, fijo: Boolean, alCambiar: (Int?) -> Unit) {
+    val paso = 15
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Al día", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+        OutlinedButton(
+            onClick = { alCambiar(((objetivoMin - paso) / paso * paso).coerceAtLeast(paso)) },
+            contentPadding = PaddingValues(0.dp),
+            modifier = Modifier.size(40.dp),
+        ) { Text("−", style = MaterialTheme.typography.titleLarge) }
+        Text(
+            enHoras(objetivoMin),
+            style = MaterialTheme.typography.titleLarge,
+            color = ORO,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.width(96.dp),
+        )
+        OutlinedButton(
+            onClick = { alCambiar(((objetivoMin + paso) / paso * paso).coerceAtMost(240)) },
+            contentPadding = PaddingValues(0.dp),
+            modifier = Modifier.size(40.dp),
+        ) { Text("+", style = MaterialTheme.typography.titleLarge) }
+    }
+    if (fijo) {
+        TextButton(onClick = { alCambiar(null) }) {
+            Text("Volver a automático", style = MaterialTheme.typography.bodySmall)
         }
     }
 }

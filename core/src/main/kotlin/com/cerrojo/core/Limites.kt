@@ -39,7 +39,17 @@ fun semana(instalacion: LocalDate, hoy: LocalDate): Int =
 fun limitesDe(media: Int, semana: Int, sueloMin: Int = SUELO_POR_DEFECTO_MIN): Limites {
     require(semana >= 1) { "la semana empieza en 1" }
     val bruto = media * 0.9.pow(semana - 1)
-    val objetivo = maxOf(sueloMin, bruto.roundToInt())
+    return limitesConObjetivo(maxOf(sueloMin, bruto.roundToInt()))
+}
+
+/**
+ * Sesion y descanso a partir de un tope diario. Lo usa el calculo automatico
+ * y tambien el tope que el usuario elige a mano para una app: "no puedo
+ * elegir cuanto tiempo darle a cada app" (1-oct) — el automatico sale de tu
+ * media y baja cada lunes, y a veces lo que quieres es un numero fijo.
+ */
+fun limitesConObjetivo(objetivoMin: Int): Limites {
+    val objetivo = objetivoMin.coerceAtLeast(1)
     val sesion = (objetivo / 4.0).roundToInt().coerceIn(5, 20)
     val enfriamiento = (sesion * 4).coerceIn(20, 90)
     return Limites(objetivo, sesion, enfriamiento, objetivo)

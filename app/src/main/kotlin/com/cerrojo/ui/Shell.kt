@@ -80,7 +80,7 @@ class Shell : ComponentActivity() {
                                 // avisarte': cierto, pero inutil, porque
                                 // aqui los avisos los da Seal.
                                 settings.userAgentString =
-                                    settings.userAgentString + " Seal/1.4"
+                                    settings.userAgentString + " Seal/1.5"
                                 settings.domStorageEnabled = true
                                 settings.databaseEnabled = true
                                 CookieManager.getInstance().setAcceptCookie(true)
